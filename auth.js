@@ -18,7 +18,7 @@ function clearAuthCallbackUrl(){
   u.hash="";
   window.history.replaceState({},document.title,`${u.pathname}${u.search}`);
 }
-function setInviteFormState(state,user=null){
+function setInviteFormState(state,user=null,reason=""){
   const intro=document.getElementById("inviteIntro");
   const email=document.getElementById("inviteAccountEmail");
   const fields=[document.getElementById("invitePassword"),document.getElementById("invitePasswordConfirm")];
@@ -34,7 +34,7 @@ function setInviteFormState(state,user=null){
     return;
   }
   if(state==="invalid"){
-    if(intro)intro.innerHTML="<b>This invitation link could not be verified.</b><br>It may have expired or already been used. Ask your Construct360 administrator to send a new invitation.";
+    if(intro)intro.innerHTML=`<b>This invitation link could not be verified.</b><br>${reason?escapeHtmlAttr(reason):"It may have expired, already been used, or opened in an unsupported email preview."} Ask your Construct360 administrator to send a new invitation.`;
     if(email)email.style.display="none";
     fields.forEach(x=>{if(x){x.disabled=true;x.value=""}});
     if(button){button.disabled=true;button.textContent="Invitation unavailable"}
@@ -234,17 +234,26 @@ async function initialiseSupabaseAuth(){
     c360Session=session;
     if(event==="PASSWORD_RECOVERY"){c360RecoveryMode=true;setAuthLoading(false);showLogin();switchAuthView("reset");return}
     if(event==="SIGNED_OUT"){c360Access=null;setAuthLoading(false);showLogin();switchAuthView("signin");return}
-    if(event==="SIGNED_IN"||event==="INITIAL_SESSION"||event==="USER_UPDATED"){setTimeout(()=>routeAuthenticatedUser(),0)}
+    if(event==="INITIAL_SESSION"&&!session&&intent==="invite")return;
+    if((event==="SIGNED_IN"||event==="INITIAL_SESSION"||event==="USER_UPDATED")&&session){setTimeout(()=>routeAuthenticatedUser(),0)}
   });
   const {data:{session},error}=await sb.auth.getSession();
   if(error){setAuthLoading(false);setAuthMessage(normaliseAuthError(error));return}
   c360Session=session;
   if(!session&&intent==="invite"){
-    setTimeout(async()=>{
-      const {data:{session:retrySession}}=await sb.auth.getSession();
+    if(authUrlError()){
+      setAuthLoading(false);showLogin();switchAuthView("invite-password");setInviteFormState("invalid",null,authUrlError());
+      return;
+    }
+    const started=Date.now();
+    const waitForInviteSession=async()=>{
+      const {data:{session:retrySession},error:retryError}=await sb.auth.getSession();
       if(retrySession){c360Session=retrySession;await routeAuthenticatedUser();return}
+      if(retryError){setAuthLoading(false);showLogin();switchAuthView("invite-password");setInviteFormState("invalid",null,normaliseAuthError(retryError));return}
+      if(Date.now()-started<15000){setTimeout(waitForInviteSession,500);return}
       setAuthLoading(false);showLogin();switchAuthView("invite-password");setInviteFormState("invalid");
-    },1800);
+    };
+    setTimeout(waitForInviteSession,500);
     return;
   }
   if(!session){setAuthLoading(false);switchAuthView("signin")}
