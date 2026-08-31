@@ -176,6 +176,16 @@ async function fetchCurrentAccess(){
   if(pe)throw pe;if(me)throw me;
   return {user,profile,membership,organisation:membership?.organisations||null};
 }
+async function syncLinkedStaffFromSupabase(){
+  if(!c360Access?.membership?.organisation_id||!Array.isArray(window.staff||staff))return;
+  const {data,error}=await authClient().from("staff_members").select("id,user_id,full_name,email,employment_role,team_name,qualification,availability,is_active").eq("organisation_id",c360Access.membership.organisation_id).order("created_at");
+  if(error){console.warn("Linked staff could not be loaded",error);return}
+  for(let i=staff.length-1;i>=0;i--)if(staff[i]._linkedUser)staff.splice(i,1);
+  (data||[]).forEach(row=>staff.push({staffId:row.id,userId:row.user_id,name:row.full_name,role:row.employment_role,team:"",qual:row.qualification||"None",avail:row.is_active?(row.availability||"Available"):"Unavailable",driver:"No",hourlyRate:0,notes:`Linked Construct360 account · ${row.email}`,_linkedUser:true,isActive:row.is_active,credentials:[],leave:[],training:[]}));
+  const state=getTeams();
+  (data||[]).forEach(row=>state.assignments[row.id]=row.team_name||"Unassigned");
+  saveTeams(state);
+}
 async function routeAuthenticatedUser(){
   const sb=authClient();if(!sb){showMissingAuthConfig();return}
   setAuthLoading(true,"Loading your company access…");
@@ -188,6 +198,7 @@ async function routeAuthenticatedUser(){
     if(!c360Access.user){showLogin();switchAuthView("signin");return}
     if(!c360Access.membership){showLogin();switchAuthView("onboarding");return}
     if(!c360Access.membership.is_active){showLogin();switchAuthView("disabled");return}
+    await syncLinkedStaffFromSupabase();
     applyAccessToUi();showApp(c360Access.profile?.full_name||c360Access.user.email);await logAppActivity("session_ready","Signed in to Construct360");
   }catch(e){setAuthLoading(false);console.error(e);showLogin();switchAuthView("signin");setAuthMessage("Your company access could not be loaded. Try signing in again.");}
 }
@@ -263,13 +274,18 @@ async function refreshAdminUsers(){
   if(error){document.getElementById("adminUsersContent").innerHTML=`<div class="login-error show">${escapeHtmlAttr(normaliseAuthError(error))}</div>`;return}
   const ids=members.map(m=>m.user_id);let profiles=[];if(ids.length){const r=await sb.from("profiles").select("id,email,full_name").in("id",ids);if(r.error)throw r.error;profiles=r.data||[]}
   const pmap=Object.fromEntries(profiles.map(p=>[p.id,p]));
-  document.getElementById("adminUsersContent").innerHTML=`<div class="card" style="padding:12px"><h3>Invite user</h3><div class="formgrid"><div class="field"><label>Full name</label><input id="inviteName" maxlength="120" placeholder="New user"></div><div class="field"><label>Email</label><input id="inviteEmail" type="email" placeholder="user@company.co.uk"></div><div class="field"><label>Role</label><select id="inviteRole"><option value="operations">Operations</option><option value="supervisor">Supervisor</option><option value="operative">Operative</option><option value="admin">Admin</option></select></div><div class="field" style="display:flex;align-items:end"><button class="btn" style="width:100%" onclick="inviteCompanyUser()">Send invite</button></div></div></div>
-  <div class="user-admin-list">${members.map(m=>{const p=pmap[m.user_id]||{};return `<div class="user-admin-row"><div><div class="user-admin-name">${escapeHtmlAttr(p.full_name||"User")}</div><div class="user-admin-email">${escapeHtmlAttr(p.email||m.user_id)}</div></div><select onchange="changeCompanyUserRole('${m.user_id}',this.value)" ${m.user_id===c360Access.user.id?'disabled':''}><option value="admin" ${m.role==='admin'?'selected':''}>Admin</option><option value="operations" ${m.role==='operations'?'selected':''}>Operations</option><option value="supervisor" ${m.role==='supervisor'?'selected':''}>Supervisor</option><option value="operative" ${m.role==='operative'?'selected':''}>Operative</option></select><button class="btn secondary" ${m.user_id===c360Access.user.id?'disabled':''} onclick="setCompanyUserActive('${m.user_id}',${!m.is_active})"><span class="status-dot ${m.is_active?'':'off'}"></span>${m.is_active?'Active':'Disabled'}</button></div>`}).join("")}</div>`;
+  document.getElementById("adminUsersContent").innerHTML=`<div class="card" style="padding:12px"><h3>Invite user</h3><div class="formgrid"><div class="field"><label>Full name</label><input id="inviteName" maxlength="120" placeholder="New user"></div><div class="field"><label>Email</label><input id="inviteEmail" type="email" placeholder="user@company.co.uk"></div><div class="field"><label>Role</label><select id="inviteRole"><option value="operations">Operations</option><option value="supervisor">Supervisor</option><option value="operative">Operative</option><option value="admin">Admin</option></select></div><div class="field" style="display:flex;align-items:end"><button class="btn" style="width:100%" onclick="inviteCompanyUser()">Send invite</button></div></div><div class="muted" style="margin-top:9px">Operatives and Supervisors are also added automatically to the Staff page.</div></div>
+  <div class="user-admin-list">${members.map(m=>{const p=pmap[m.user_id]||{};return `<div class="user-admin-row"><div><div class="user-admin-name">${escapeHtmlAttr(p.full_name||"User")}</div><div class="user-admin-email">${escapeHtmlAttr(p.email||m.user_id)}</div></div><select onchange="changeCompanyUserRole('${m.user_id}',this.value)" ${m.user_id===c360Access.user.id?'disabled':''}><option value="admin" ${m.role==='admin'?'selected':''}>Admin</option><option value="operations" ${m.role==='operations'?'selected':''}>Operations</option><option value="supervisor" ${m.role==='supervisor'?'selected':''}>Supervisor</option><option value="operative" ${m.role==='operative'?'selected':''}>Operative</option></select><button class="btn secondary" ${m.user_id===c360Access.user.id?'disabled':''} onclick="setCompanyUserActive('${m.user_id}',${!m.is_active})"><span class="status-dot ${m.is_active?'':'off'}"></span>${m.is_active?'Active':'Disabled'}</button><button class="btn danger" ${m.user_id===c360Access.user.id?'disabled':''} onclick="permanentlyDeleteCompanyUser('${m.user_id}')">Remove permanently</button></div>`}).join("")}</div>`;
 }
 async function inviteCompanyUser(){
   const full_name=(document.getElementById("inviteName")?.value||"").trim(),email=(document.getElementById("inviteEmail")?.value||"").trim(),role=document.getElementById("inviteRole")?.value;
   if(!full_name||!email){toast("Enter the user's name and email");return}
   try{await callAdminFunction({action:"invite",full_name,email,role});toast("Invitation sent");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e))}
 }
-async function changeCompanyUserRole(user_id,role){try{await callAdminFunction({action:"update-role",user_id,role});toast("Role updated");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));await refreshAdminUsers()}}
-async function setCompanyUserActive(user_id,is_active){try{await callAdminFunction({action:"set-active",user_id,is_active});toast(is_active?"User reactivated":"User disabled");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));await refreshAdminUsers()}}
+async function changeCompanyUserRole(user_id,role){try{await callAdminFunction({action:"update-role",user_id,role});await syncLinkedStaffFromSupabase();toast("Role updated");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));await refreshAdminUsers()}}
+async function setCompanyUserActive(user_id,is_active){try{await callAdminFunction({action:"set-active",user_id,is_active});await syncLinkedStaffFromSupabase();toast(is_active?"User reactivated":"User disabled");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));await refreshAdminUsers()}}
+async function permanentlyDeleteCompanyUser(user_id){
+  if(!confirm("Permanently delete this user?\n\nThis removes their login, company access and linked Staff record. This cannot be undone."))return;
+  if(!confirm("Final confirmation: permanently delete this user?"))return;
+  try{await callAdminFunction({action:"delete-user",user_id});await syncLinkedStaffFromSupabase();toast("User permanently deleted");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));await refreshAdminUsers()}
+}
