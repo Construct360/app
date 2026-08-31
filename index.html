@@ -749,6 +749,9 @@ img{max-width:100%;height:auto}
 .membership-role{display:inline-flex;padding:3px 7px;border-radius:5px;background:#eaf1f8;color:#06234d;font-size:10px;font-weight:800;text-transform:capitalize}
 .user-admin-list{display:grid;gap:8px;margin-top:12px}.user-admin-row{border:1px solid #e5e9f0;border-radius:9px;padding:10px;background:#fff;display:grid;grid-template-columns:minmax(160px,1fr) 150px 120px;gap:10px;align-items:center}.user-admin-name{font-weight:750;font-size:12px}.user-admin-email{font-size:11px;color:#667085;margin-top:2px}.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:5px}.status-dot.off{background:#ef4444}
 .auth-setup-block{border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:9px;padding:11px;font-size:11px;line-height:1.5;margin-top:12px}
+.invite-account{display:none;margin:10px 0 14px;padding:10px 11px;border:1px solid #dbe5f0;border-radius:8px;background:#f8fafc;color:#344054;font-size:12px;font-weight:700;overflow-wrap:anywhere}
+.invite-steps{margin:0 0 14px;padding-left:20px;color:#475467;font-size:12px;line-height:1.6}.invite-steps li::marker{font-weight:800;color:#0f766e}
+.invite-help{display:none;text-align:center;margin-top:12px;font-size:12px;color:#667085}
 @media(max-width:800px){.account-btn,.admin-users-btn{min-height:40px}.user-admin-row{grid-template-columns:1fr}.login-card{padding:22px!important}.auth-tabs button{min-height:40px}}
 </style>
 
@@ -794,10 +797,13 @@ img{max-width:100%;height:auto}
     </div>
 
     <div class="auth-view" id="auth-invite-password">
-      <div class="auth-message info show">Your invitation has been accepted. Set a password to finish securing your account.</div>
+      <div class="auth-message info show" id="inviteIntro"><b>Accepting your invitation…</b><br>Please wait while Construct360 verifies the secure link.</div>
+      <div class="invite-account" id="inviteAccountEmail"></div>
+      <ol class="invite-steps"><li>Create a password with at least 10 characters.</li><li>Confirm the same password.</li><li>Join your company workspace.</li></ol>
       <div class="login-field"><label>New password</label><input id="invitePassword" type="password" autocomplete="new-password" placeholder="Create a password"></div>
       <div class="login-field"><label>Confirm new password</label><input id="invitePasswordConfirm" type="password" autocomplete="new-password" placeholder="Repeat password"></div>
-      <button class="btn" style="width:100%;padding:12px" onclick="completeInvitePassword()">Set password</button>
+      <button class="btn" id="completeInviteBtn" style="width:100%;padding:12px" onclick="completeInvitePassword()" disabled>Verifying invitation…</button>
+      <div class="invite-help" id="inviteHelp">Need another invitation? Contact the person who invited you.<br><button class="login-link" type="button" onclick="clearAuthCallbackUrl();switchAuthView('signin')">Return to sign in</button></div>
     </div>
 
     <div class="auth-view" id="auth-onboarding">

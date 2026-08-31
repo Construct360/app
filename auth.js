@@ -4,6 +4,50 @@ let c360Session=null;
 let c360Access=null;
 let c360RecoveryMode=false;
 
+function authUrlIntent(){
+  return new URL(window.location.href).searchParams.get("auth")||"";
+}
+function authUrlError(){
+  const u=new URL(window.location.href);
+  const hash=new URLSearchParams(u.hash.replace(/^#/,""));
+  return u.searchParams.get("error_description")||hash.get("error_description")||"";
+}
+function clearAuthCallbackUrl(){
+  const u=new URL(window.location.href);
+  ["auth","code","error","error_code","error_description","type","token_hash"].forEach(k=>u.searchParams.delete(k));
+  u.hash="";
+  window.history.replaceState({},document.title,`${u.pathname}${u.search}`);
+}
+function setInviteFormState(state,user=null){
+  const intro=document.getElementById("inviteIntro");
+  const email=document.getElementById("inviteAccountEmail");
+  const fields=[document.getElementById("invitePassword"),document.getElementById("invitePasswordConfirm")];
+  const button=document.getElementById("completeInviteBtn");
+  const help=document.getElementById("inviteHelp");
+  if(state==="ready"){
+    if(intro)intro.innerHTML="<b>Invitation accepted.</b><br>Choose a password, then select <b>Create password and join workspace</b>.";
+    if(email){email.textContent=user?.email||"Your invited email";email.style.display="block"}
+    fields.forEach(x=>{if(x)x.disabled=false});
+    if(button){button.disabled=false;button.textContent="Create password and join workspace"}
+    if(help)help.style.display="none";
+    fields[0]?.focus();
+    return;
+  }
+  if(state==="invalid"){
+    if(intro)intro.innerHTML="<b>This invitation link could not be verified.</b><br>It may have expired or already been used. Ask your Construct360 administrator to send a new invitation.";
+    if(email)email.style.display="none";
+    fields.forEach(x=>{if(x){x.disabled=true;x.value=""}});
+    if(button){button.disabled=true;button.textContent="Invitation unavailable"}
+    if(help)help.style.display="block";
+    return;
+  }
+  if(intro)intro.innerHTML="<b>Accepting your invitation…</b><br>Please wait while Construct360 verifies the secure link.";
+  if(email)email.style.display="none";
+  fields.forEach(x=>{if(x)x.disabled=true});
+  if(button){button.disabled=true;button.textContent="Verifying invitation…"}
+  if(help)help.style.display="none";
+}
+
 function authConfigReady(){
   const c=window.CONSTRUCT360_CONFIG||{};
   return Boolean(c.supabaseUrl&&c.supabaseAnonKey&&!c.supabaseUrl.startsWith("YOUR_")&&!c.supabaseAnonKey.startsWith("YOUR_"));
@@ -105,6 +149,8 @@ async function completeInvitePassword(){
   setAuthLoading(true,"Securing account…");
   const {error}=await sb.auth.updateUser({password:p,data:{needs_password_setup:false}});setAuthLoading(false);
   if(error){setAuthMessage(normaliseAuthError(error));return}
+  clearAuthCallbackUrl();
+  setAuthMessage("Your password is set. Opening your company workspace…","success");
   await routeAuthenticatedUser();
 }
 async function logoutUser(){
@@ -137,7 +183,7 @@ async function routeAuthenticatedUser(){
     const {data:{session}}=await sb.auth.getSession();c360Session=session;
     if(!session){setAuthLoading(false);showLogin();switchAuthView("signin");return}
     if(c360RecoveryMode){setAuthLoading(false);showLogin();switchAuthView("reset");return}
-    if(session.user?.user_metadata?.needs_password_setup){setAuthLoading(false);showLogin();switchAuthView("invite-password");return}
+    if(session.user?.user_metadata?.needs_password_setup){setAuthLoading(false);showLogin();switchAuthView("invite-password");setInviteFormState("ready",session.user);return}
     c360Access=await fetchCurrentAccess();setAuthLoading(false);
     if(!c360Access.user){showLogin();switchAuthView("signin");return}
     if(!c360Access.membership){showLogin();switchAuthView("onboarding");return}
@@ -167,7 +213,12 @@ function showMissingAuthConfig(){
 async function initialiseSupabaseAuth(){
   showLogin();
   if(!authConfigReady()){showMissingAuthConfig();return}
-  const sb=authClient();setAuthLoading(true,"Restoring your secure session…");
+  const sb=authClient(),intent=authUrlIntent();
+  if(intent==="invite"){
+    switchAuthView("invite-password");
+    setInviteFormState(authUrlError()?"invalid":"checking");
+  }
+  setAuthLoading(true,intent==="invite"?"Verifying your invitation…":"Restoring your secure session…");
   sb.auth.onAuthStateChange(async(event,session)=>{
     c360Session=session;
     if(event==="PASSWORD_RECOVERY"){c360RecoveryMode=true;setAuthLoading(false);showLogin();switchAuthView("reset");return}
@@ -176,7 +227,16 @@ async function initialiseSupabaseAuth(){
   });
   const {data:{session},error}=await sb.auth.getSession();
   if(error){setAuthLoading(false);setAuthMessage(normaliseAuthError(error));return}
-  c360Session=session;if(!session){setAuthLoading(false);switchAuthView("signin")}
+  c360Session=session;
+  if(!session&&intent==="invite"){
+    setTimeout(async()=>{
+      const {data:{session:retrySession}}=await sb.auth.getSession();
+      if(retrySession){c360Session=retrySession;await routeAuthenticatedUser();return}
+      setAuthLoading(false);showLogin();switchAuthView("invite-password");setInviteFormState("invalid");
+    },1800);
+    return;
+  }
+  if(!session){setAuthLoading(false);switchAuthView("signin")}
 }
 async function openAccountPanel(){
   if(!c360Access)return;
