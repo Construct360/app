@@ -23,12 +23,24 @@ function setInviteFormState(state,user=null,reason=""){
   const email=document.getElementById("inviteAccountEmail");
   const fields=[document.getElementById("invitePassword"),document.getElementById("invitePasswordConfirm")];
   const button=document.getElementById("completeInviteBtn");
+  const acceptButton=document.getElementById("acceptInviteBtn");
   const help=document.getElementById("inviteHelp");
+  if(state==="review"){
+    if(intro)intro.innerHTML="<b>You have been invited to Construct360.</b><br>Select <b>Accept invitation</b> to verify the secure link. You will then create your password.";
+    if(email)email.style.display="none";
+    fields.forEach(x=>{if(x){x.disabled=true;x.value=""}});
+    if(button){button.disabled=true;button.textContent="Create password and join workspace"}
+    if(acceptButton){acceptButton.style.display="block";acceptButton.disabled=false;acceptButton.textContent="Accept invitation"}
+    if(help)help.style.display="none";
+    acceptButton?.focus();
+    return;
+  }
   if(state==="ready"){
     if(intro)intro.innerHTML="<b>Invitation accepted.</b><br>Choose a password, then select <b>Create password and join workspace</b>.";
     if(email){email.textContent=user?.email||"Your invited email";email.style.display="block"}
     fields.forEach(x=>{if(x)x.disabled=false});
     if(button){button.disabled=false;button.textContent="Create password and join workspace"}
+    if(acceptButton)acceptButton.style.display="none";
     if(help)help.style.display="none";
     fields[0]?.focus();
     return;
@@ -38,6 +50,7 @@ function setInviteFormState(state,user=null,reason=""){
     if(email)email.style.display="none";
     fields.forEach(x=>{if(x){x.disabled=true;x.value=""}});
     if(button){button.disabled=true;button.textContent="Invitation unavailable"}
+    if(acceptButton)acceptButton.style.display="none";
     if(help)help.style.display="block";
     return;
   }
@@ -45,6 +58,7 @@ function setInviteFormState(state,user=null,reason=""){
   if(email)email.style.display="none";
   fields.forEach(x=>{if(x)x.disabled=true});
   if(button){button.disabled=true;button.textContent="Verifying invitation…"}
+  if(acceptButton)acceptButton.style.display="none";
   if(help)help.style.display="none";
 }
 
@@ -153,6 +167,21 @@ async function completeInvitePassword(){
   setAuthMessage("Your password is set. Opening your company workspace…","success");
   await routeAuthenticatedUser();
 }
+async function acceptEmailInvitation(){
+  const sb=authClient();if(!sb)return;
+  const u=new URL(window.location.href);const tokenHash=u.searchParams.get("token_hash")||"";
+  if(!tokenHash){setInviteFormState("invalid",null,"The secure invitation token is missing.");return}
+  const acceptButton=document.getElementById("acceptInviteBtn");
+  if(acceptButton){acceptButton.disabled=true;acceptButton.textContent="Accepting invitation…"}
+  setAuthLoading(true,"Accepting your invitation…");
+  const {data,error}=await sb.auth.verifyOtp({token_hash:tokenHash,type:"invite"});
+  setAuthLoading(false);
+  if(error){setInviteFormState("invalid",null,normaliseAuthError(error));return}
+  c360Session=data.session;
+  u.searchParams.delete("token_hash");u.searchParams.delete("type");u.hash="";
+  window.history.replaceState({},document.title,`${u.pathname}${u.search}`);
+  setInviteFormState("ready",data.user);
+}
 async function logoutUser(){
   const sb=authClient();if(sb)await sb.auth.signOut();c360Session=null;c360Access=null;showLogin();switchAuthView("signin");
   const pw=document.getElementById("loginPassword");if(pw)pw.value="";
@@ -224,12 +253,12 @@ function showMissingAuthConfig(){
 async function initialiseSupabaseAuth(){
   showLogin();
   if(!authConfigReady()){showMissingAuthConfig();return}
-  const sb=authClient(),intent=authUrlIntent();
+  const sb=authClient(),intent=authUrlIntent(),inviteTokenHash=new URL(window.location.href).searchParams.get("token_hash")||"";
   if(intent==="invite"){
     switchAuthView("invite-password");
-    setInviteFormState(authUrlError()?"invalid":"checking");
+    setInviteFormState(authUrlError()?"invalid":inviteTokenHash?"review":"checking");
   }
-  setAuthLoading(true,intent==="invite"?"Verifying your invitation…":"Restoring your secure session…");
+  setAuthLoading(!inviteTokenHash,intent==="invite"?"Verifying your invitation…":"Restoring your secure session…");
   sb.auth.onAuthStateChange(async(event,session)=>{
     c360Session=session;
     if(event==="PASSWORD_RECOVERY"){c360RecoveryMode=true;setAuthLoading(false);showLogin();switchAuthView("reset");return}
@@ -240,6 +269,9 @@ async function initialiseSupabaseAuth(){
   const {data:{session},error}=await sb.auth.getSession();
   if(error){setAuthLoading(false);setAuthMessage(normaliseAuthError(error));return}
   c360Session=session;
+  if(!session&&intent==="invite"&&inviteTokenHash){
+    setAuthLoading(false);showLogin();switchAuthView("invite-password");setInviteFormState("review");return;
+  }
   if(!session&&intent==="invite"){
     if(authUrlError()){
       setAuthLoading(false);showLogin();switchAuthView("invite-password");setInviteFormState("invalid",null,authUrlError());
@@ -271,7 +303,14 @@ async function saveAccountProfile(){
   if(error){toast(normaliseAuthError(error));return}c360Access.profile.full_name=name;applyAccessToUi();closeModal();toast("Profile updated");await logAppActivity("profile_updated","Updated account profile");
 }
 async function callAdminFunction(body){
-  const {data,error}=await authClient().functions.invoke(window.CONSTRUCT360_CONFIG.adminFunctionName||"admin-users",{body});if(error)throw error;if(data?.error)throw new Error(data.error);return data;
+  const {data,error}=await authClient().functions.invoke(window.CONSTRUCT360_CONFIG.adminFunctionName||"admin-users",{body});
+  if(data?.error)throw new Error(data.error);
+  if(error){
+    let message=error.message||"The request failed.";
+    try{const details=await error.context?.json();if(details?.error)message=details.error}catch{}
+    throw new Error(message);
+  }
+  return data;
 }
 async function openAdminUsers(){
   if(c360Access?.membership?.role!=="admin"){toast("Admin access required");return}
@@ -283,13 +322,14 @@ async function refreshAdminUsers(){
   if(error){document.getElementById("adminUsersContent").innerHTML=`<div class="login-error show">${escapeHtmlAttr(normaliseAuthError(error))}</div>`;return}
   const ids=members.map(m=>m.user_id);let profiles=[];if(ids.length){const r=await sb.from("profiles").select("id,email,full_name").in("id",ids);if(r.error)throw r.error;profiles=r.data||[]}
   const pmap=Object.fromEntries(profiles.map(p=>[p.id,p]));
-  document.getElementById("adminUsersContent").innerHTML=`<div class="card" style="padding:12px"><h3>Invite user</h3><div class="formgrid"><div class="field"><label>Full name</label><input id="inviteName" maxlength="120" placeholder="New user"></div><div class="field"><label>Email</label><input id="inviteEmail" type="email" placeholder="user@company.co.uk"></div><div class="field"><label>Role</label><select id="inviteRole"><option value="operations">Operations</option><option value="supervisor">Supervisor</option><option value="operative">Operative</option><option value="admin">Admin</option></select></div><div class="field" style="display:flex;align-items:end"><button class="btn" style="width:100%" onclick="inviteCompanyUser()">Send invite</button></div></div><div class="muted" style="margin-top:9px">Operatives and Supervisors are also added automatically to the Staff page.</div></div>
+  document.getElementById("adminUsersContent").innerHTML=`<div class="card" style="padding:12px"><h3>Invite user</h3><div class="formgrid"><div class="field"><label>Full name</label><input id="inviteName" maxlength="120" placeholder="New user"></div><div class="field"><label>Email</label><input id="inviteEmail" type="email" placeholder="user@company.co.uk"></div><div class="field"><label>Role</label><select id="inviteRole"><option value="operations">Operations</option><option value="supervisor">Supervisor</option><option value="operative">Operative</option><option value="admin">Admin</option></select></div><div class="field" style="display:flex;align-items:end"><button class="btn" id="sendInviteBtn" style="width:100%" onclick="inviteCompanyUser()">Send invite</button></div></div><div class="muted" style="margin-top:9px">Operatives and Supervisors are also added automatically to the Staff page.</div></div>
   <div class="user-admin-list">${members.map(m=>{const p=pmap[m.user_id]||{};return `<div class="user-admin-row"><div><div class="user-admin-name">${escapeHtmlAttr(p.full_name||"User")}</div><div class="user-admin-email">${escapeHtmlAttr(p.email||m.user_id)}</div></div><select onchange="changeCompanyUserRole('${m.user_id}',this.value)" ${m.user_id===c360Access.user.id?'disabled':''}><option value="admin" ${m.role==='admin'?'selected':''}>Admin</option><option value="operations" ${m.role==='operations'?'selected':''}>Operations</option><option value="supervisor" ${m.role==='supervisor'?'selected':''}>Supervisor</option><option value="operative" ${m.role==='operative'?'selected':''}>Operative</option></select><button class="btn secondary" ${m.user_id===c360Access.user.id?'disabled':''} onclick="setCompanyUserActive('${m.user_id}',${!m.is_active})"><span class="status-dot ${m.is_active?'':'off'}"></span>${m.is_active?'Active':'Disabled'}</button><button class="btn danger" ${m.user_id===c360Access.user.id?'disabled':''} onclick="permanentlyDeleteCompanyUser('${m.user_id}')">Remove permanently</button></div>`}).join("")}</div>`;
 }
 async function inviteCompanyUser(){
   const full_name=(document.getElementById("inviteName")?.value||"").trim(),email=(document.getElementById("inviteEmail")?.value||"").trim(),role=document.getElementById("inviteRole")?.value;
   if(!full_name||!email){toast("Enter the user's name and email");return}
-  try{await callAdminFunction({action:"invite",full_name,email,role});toast("Invitation sent");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e))}
+  const button=document.getElementById("sendInviteBtn");if(button){button.disabled=true;button.textContent="Sending…"}
+  try{await callAdminFunction({action:"invite",full_name,email,role});toast("Invitation sent and user created");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));if(button){button.disabled=false;button.textContent="Send invite"}}
 }
 async function changeCompanyUserRole(user_id,role){try{await callAdminFunction({action:"update-role",user_id,role});await syncLinkedStaffFromSupabase();toast("Role updated");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));await refreshAdminUsers()}}
 async function setCompanyUserActive(user_id,is_active){try{await callAdminFunction({action:"set-active",user_id,is_active});await syncLinkedStaffFromSupabase();toast(is_active?"User reactivated":"User disabled");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));await refreshAdminUsers()}}

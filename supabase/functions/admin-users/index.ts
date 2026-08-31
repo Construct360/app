@@ -25,22 +25,52 @@ Deno.serve(async(req)=>{
     if(action==="invite"){
       const email=String(body.email||"").trim().toLowerCase();const full_name=String(body.full_name||"").trim();const role=String(body.role||"operative");
       if(!email.includes("@")||!full_name||!roles.has(role))return json({error:"Valid name, email and role are required"},400);
-      const {data:existingMembership}=await admin.from("organisation_memberships").select("user_id").eq("organisation_id",caller.organisation_id).eq("user_id",body.user_id||"00000000-0000-0000-0000-000000000000").maybeSingle();
-      if(existingMembership)return json({error:"User already belongs to this company"},409);
-      const redirectTo=appUrl?`${appUrl.replace(/\/$/,"")}/?auth=invite`:undefined;
-      const {data:invited,error:inviteError}=await admin.auth.admin.inviteUserByEmail(email,{redirectTo,data:{full_name,needs_password_setup:true}});
-      if(inviteError)throw inviteError;
-      const invitedUser=invited.user;if(!invitedUser)return json({error:"Invite did not create a user"},500);
-      await admin.from("profiles").upsert({id:invitedUser.id,email,full_name},{onConflict:"id"});
-      const {error:membershipError}=await admin.from("organisation_memberships").insert({organisation_id:caller.organisation_id,user_id:invitedUser.id,role,is_active:true,created_by:user.id});
-      if(membershipError)throw membershipError;
       const linkedRole=staffRole(role);
       if(linkedRole){
-        const {error:staffError}=await admin.from("staff_members").upsert({organisation_id:caller.organisation_id,user_id:invitedUser.id,full_name,email,employment_role:linkedRole,team_name:"Unassigned",qualification:"None",availability:"Available",is_active:true,created_by:user.id},{onConflict:"user_id"});
-        if(staffError)throw staffError;
+        const {error:staffTableError}=await admin.from("staff_members").select("id").limit(1);
+        if(staffTableError)return json({error:"Staff setup is incomplete. Run migration 002_linked_staff_members.sql before inviting an Operative or Supervisor."},503);
       }
-      await admin.from("user_activity_log").insert({organisation_id:caller.organisation_id,actor_user_id:user.id,event_type:"user_invited",description:`Invited ${email} as ${role}`,metadata:{target_user_id:invitedUser.id}});
-      return json({ok:true,user_id:invitedUser.id});
+
+      console.log("[admin-users] invite requested",{actor_user_id:user.id,organisation_id:caller.organisation_id,role});
+      const {data:userPage,error:listUsersError}=await admin.auth.admin.listUsers({page:1,perPage:1000});
+      if(listUsersError)throw listUsersError;
+      const existingUser=userPage.users.find(candidate=>candidate.email?.trim().toLowerCase()===email);
+      if(existingUser){
+        const incompleteInvite=existingUser.user_metadata?.needs_password_setup===true;
+        if(existingUser.email_confirmed_at&&!incompleteInvite)return json({error:"An active account already exists for this email. Ask the user to sign in or reset their password."},409);
+        const {error:cleanupError}=await admin.auth.admin.deleteUser(existingUser.id,false);
+        if(cleanupError)throw new Error(`A previous incomplete invitation exists and could not be replaced: ${cleanupError.message}`);
+        console.log("[admin-users] removed incomplete invite before retry",{target_user_id:existingUser.id});
+      }
+
+      let invitedUserId="";
+      try{
+        const redirectTo=appUrl?`${appUrl.replace(/\/$/,"")}/?auth=invite`:undefined;
+        const {data:invited,error:inviteError}=await admin.auth.admin.inviteUserByEmail(email,{redirectTo,data:{full_name,needs_password_setup:true}});
+        if(inviteError)throw inviteError;
+        const invitedUser=invited.user;if(!invitedUser)throw new Error("Invite did not create a user");
+        invitedUserId=invitedUser.id;
+
+        const {error:profileError}=await admin.from("profiles").upsert({id:invitedUser.id,email,full_name},{onConflict:"id"});
+        if(profileError)throw profileError;
+        const {error:membershipError}=await admin.from("organisation_memberships").insert({organisation_id:caller.organisation_id,user_id:invitedUser.id,role,is_active:true,created_by:user.id});
+        if(membershipError)throw membershipError;
+        if(linkedRole){
+          const {error:staffError}=await admin.from("staff_members").upsert({organisation_id:caller.organisation_id,user_id:invitedUser.id,full_name,email,employment_role:linkedRole,team_name:"Unassigned",qualification:"None",availability:"Available",is_active:true,created_by:user.id},{onConflict:"user_id"});
+          if(staffError)throw staffError;
+        }
+        const {error:activityError}=await admin.from("user_activity_log").insert({organisation_id:caller.organisation_id,actor_user_id:user.id,event_type:"user_invited",description:`Invited ${email} as ${role}`,metadata:{target_user_id:invitedUser.id}});
+        if(activityError)console.warn("[admin-users] invite activity log failed",{target_user_id:invitedUser.id,message:activityError.message});
+        console.log("[admin-users] invite completed",{target_user_id:invitedUser.id,organisation_id:caller.organisation_id,role});
+        return json({ok:true,user_id:invitedUser.id});
+      }catch(inviteSetupError){
+        if(invitedUserId){
+          const {error:rollbackError}=await admin.auth.admin.deleteUser(invitedUserId,false);
+          if(rollbackError)console.error("[admin-users] invite rollback failed",{target_user_id:invitedUserId,message:rollbackError.message});
+          else console.log("[admin-users] rolled back failed invite",{target_user_id:invitedUserId});
+        }
+        throw inviteSetupError;
+      }
     }
 
     if(action==="update-role"){

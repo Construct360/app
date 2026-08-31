@@ -800,6 +800,7 @@ img{max-width:100%;height:auto}
       <div class="auth-message info show" id="inviteIntro"><b>Accepting your invitation…</b><br>Please wait while Construct360 verifies the secure link.</div>
       <div class="invite-account" id="inviteAccountEmail"></div>
       <ol class="invite-steps"><li>Create a password with at least 10 characters.</li><li>Confirm the same password.</li><li>Join your company workspace.</li></ol>
+      <button class="btn" id="acceptInviteBtn" style="width:100%;padding:12px;display:none" onclick="acceptEmailInvitation()">Accept invitation</button>
       <div class="login-field"><label>New password</label><input id="invitePassword" type="password" autocomplete="new-password" placeholder="Create a password"></div>
       <div class="login-field"><label>Confirm new password</label><input id="invitePasswordConfirm" type="password" autocomplete="new-password" placeholder="Repeat password"></div>
       <button class="btn" id="completeInviteBtn" style="width:100%;padding:12px" onclick="completeInvitePassword()" disabled>Verifying invitation…</button>
