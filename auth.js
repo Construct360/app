@@ -24,6 +24,7 @@ function setInviteFormState(state,user=null,reason=""){
   const fields=[document.getElementById("invitePassword"),document.getElementById("invitePasswordConfirm")];
   const button=document.getElementById("completeInviteBtn");
   const acceptButton=document.getElementById("acceptInviteBtn");
+  const passwordSetup=document.getElementById("invitePasswordSetup");
   const help=document.getElementById("inviteHelp");
   if(state==="review"){
     if(intro)intro.innerHTML="<b>You have been invited to Construct360.</b><br>Select <b>Accept invitation</b> to verify the secure link. You will then create your password.";
@@ -31,6 +32,7 @@ function setInviteFormState(state,user=null,reason=""){
     fields.forEach(x=>{if(x){x.disabled=true;x.value=""}});
     if(button){button.disabled=true;button.textContent="Create password and join workspace"}
     if(acceptButton){acceptButton.style.display="block";acceptButton.disabled=false;acceptButton.textContent="Accept invitation"}
+    if(passwordSetup)passwordSetup.style.display="none";
     if(help)help.style.display="none";
     acceptButton?.focus();
     return;
@@ -41,6 +43,7 @@ function setInviteFormState(state,user=null,reason=""){
     fields.forEach(x=>{if(x)x.disabled=false});
     if(button){button.disabled=false;button.textContent="Create password and join workspace"}
     if(acceptButton)acceptButton.style.display="none";
+    if(passwordSetup)passwordSetup.style.display="block";
     if(help)help.style.display="none";
     fields[0]?.focus();
     return;
@@ -51,6 +54,7 @@ function setInviteFormState(state,user=null,reason=""){
     fields.forEach(x=>{if(x){x.disabled=true;x.value=""}});
     if(button){button.disabled=true;button.textContent="Invitation unavailable"}
     if(acceptButton)acceptButton.style.display="none";
+    if(passwordSetup)passwordSetup.style.display="none";
     if(help)help.style.display="block";
     return;
   }
@@ -59,6 +63,7 @@ function setInviteFormState(state,user=null,reason=""){
   fields.forEach(x=>{if(x)x.disabled=true});
   if(button){button.disabled=true;button.textContent="Verifying invitation…"}
   if(acceptButton)acceptButton.style.display="none";
+  if(passwordSetup)passwordSetup.style.display="none";
   if(help)help.style.display="none";
 }
 
