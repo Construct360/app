@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><title>Platform Administration | Construct360</title>
+  <link rel="stylesheet" href="/platform.css">
+</head>
+<body>
+  <header class="platform-header"><a href="/" aria-label="Construct360 home"><img src="/assets/construct360-logo-primary.png" alt="Construct360" width="270" height="60"></a><span>PLATFORM ADMINISTRATION</span><a href="/">My workspace</a><button id="platformLogout" class="secondary">Sign out</button></header>
+  <main>
+    <section id="platformAccess" role="status" class="access-card"><h1>Checking your access…</h1><p>This area is restricted to Construct360 Platform Administrators.</p></section>
+    <section id="platformContent" hidden>
+      <div class="page-heading"><div><p class="eyebrow">CONSTRUCT360 CONTROL CENTRE</p><h1>Companies</h1><p>Manage company accounts and their first Admin invitations.</p></div><button id="addCompany">+ Add company</button></div>
+      <div class="notice"><strong>Foundation release · v11</strong><br>New companies have isolated account setup and user management. Jobs, clients and other operational modules are not released for new companies yet. Activating a company does not unlock those modules.</div>
+      <div id="platformMessage" class="message" role="status" aria-live="polite" hidden></div>
+      <div id="companyStats" class="stats"></div>
+      <div class="filters"><label>Find a company<input id="companySearch" type="search" placeholder="Company name or Admin email"></label><label>Status<select id="companyFilter"><option value="all">All companies</option><option value="active">Active</option><option value="suspended">Suspended</option></select></label><button id="refreshCompanies" class="secondary">Refresh</button></div>
+      <div id="companyList" class="company-grid" aria-live="polite"></div>
+      <section class="activity"><h2>Recent platform activity</h2><p>Company administration only. Customer operational records are not exposed here.</p><ol id="activityList"></ol></section>
+    </section>
+  </main>
+  <dialog id="companyDialog" aria-labelledby="companyDialogTitle"><form id="companyForm">
+    <div class="dialog-heading"><h2 id="companyDialogTitle">Add a company</h2><button type="button" id="closeCompanyDialog" class="secondary" aria-label="Close">✕</button></div>
+    <p>Create a separate workspace and invite its first company Admin. Use an email not already registered with Construct360.</p>
+    <label>Company name<input name="name" required minlength="2" maxlength="160" autocomplete="organization"></label>
+    <label>First Admin’s full name<input name="admin_name" required maxlength="120" autocomplete="name"></label>
+    <label>First Admin’s email<input name="admin_email" type="email" required maxlength="254" autocomplete="email"></label>
+    <p class="notice">The Admin will accept the invitation, set a password and see their own company setup page.</p>
+    <div id="companyFormError" class="message error" role="alert" hidden></div>
+    <button id="createCompany" type="submit">Create company &amp; send invitation</button>
+  </form></dialog>
+  <dialog id="statusDialog" aria-labelledby="statusDialogTitle"><form id="statusForm">
+    <h2 id="statusDialogTitle">Change company status</h2><p id="statusDialogMessage"></p>
+    <p class="notice">Suspension blocks company data and user-management access. Activating a company keeps new workspaces in account setup.</p>
+    <div class="company-actions"><button type="button" id="cancelStatus" class="secondary">Cancel</button><button type="submit" id="confirmStatus">Confirm change</button></div>
+  </form></dialog>
+  <script src="/api/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
+  <script src="/platform.js"></script>
+</body>
+</html>

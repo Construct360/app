@@ -811,13 +811,21 @@ img{max-width:100%;height:auto}
     </div>
 
     <div class="auth-view" id="auth-onboarding">
-      <div class="auth-message info show">Your account is verified. Create your company workspace to become its first Admin.</div>
-      <div class="login-field"><label>Company / organisation name</label><input id="onboardingCompany" maxlength="160" placeholder="e.g. South Coast Scaffolding Ltd"></div>
-      <button class="btn" style="width:100%;padding:12px" onclick="createCompanyWorkspace()">Create company workspace</button>
+      <div class="auth-message info show">Your account is not linked to a company yet. Ask your company Admin or Construct360 support to arrange your workspace invitation.</div>
       <button class="login-link" style="display:block;margin:14px auto 0" onclick="logoutUser()">Use a different account</button>
     </div>
 
+    <div class="auth-view" id="auth-workspace-setup">
+      <div class="auth-message success show"><strong id="setupCompanyName"></strong><br>Your company account is ready.</div>
+      <p class="login-sub"><span id="setupCompanyEmail"></span> · <span id="setupCompanyRole"></span></p>
+      <div class="auth-setup-block">Your company's operational workspace is being prepared. Jobs, clients and other modules are not available yet. You will not see another company's prototype data.</div>
+      <button id="setupManageUsers" class="btn" style="width:100%;margin-top:16px" onclick="openAdminUsers()">Manage company users</button>
+      <button class="btn secondary" style="width:100%;margin-top:10px" onclick="openAccountPanel()">My account</button>
+      <button class="login-link" style="display:block;margin:14px auto" onclick="routeAuthenticatedUser()">Check workspace status</button>
+      <button class="login-link" style="display:block;margin:14px auto" onclick="logoutUser()">Sign out</button>
+    </div>
     <div class="auth-view" id="auth-disabled">
+      <a id="disabledPlatformLink" href="/platform" hidden>Open Platform Administration</a>
       <div class="auth-message error show">This account does not currently have active access to a Construct360 company workspace. Contact your company administrator.</div>
       <button class="btn secondary" style="width:100%;margin-top:12px" onclick="logoutUser()">Sign out</button>
     </div>
@@ -850,7 +858,7 @@ img{max-width:100%;height:auto}
   <button data-page="inspections">⌕ &nbsp; Inspections</button>
   <button data-page="vehicles">▰ &nbsp; Vehicles</button>
 </div></aside><div class="mobile-nav-backdrop" id="mobileNavBackdrop"></div>
-<main class="main"><header class="top"><button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Open navigation">☰</button><input class="search" id="globalSearch" placeholder="Search jobs, staff, sites…"><div class="user"><span class="env-badge" title="Supabase authentication development build">AUTH DEV · v1.0 RC</span><button class="admin-users-btn" id="adminUsersBtn" type="button" onclick="openAdminUsers()">Users</button><button class="account-btn" type="button" onclick="openAccountPanel()">Account</button><button class="data-tools-btn" type="button" onclick="openDataTools()">Data & Audit</button><span id="loggedInUser">Signed in</span><div class="avatar" id="userAvatar">U</div><button class="logout-btn" onclick="logoutUser()">Log out</button></div></header><section class="content" id="content"></section></main>
+<main class="main"><header class="top"><button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Open navigation">☰</button><input class="search" id="globalSearch" placeholder="Search jobs, staff, sites…"><div class="user"><span class="env-badge" title="Supabase authentication development build">FOUNDATION · v11</span><button class="account-btn" id="platformAdminBtn" type="button" hidden onclick="location.href='/platform'">Platform</button><button class="admin-users-btn" id="adminUsersBtn" type="button" onclick="openAdminUsers()">Users</button><button class="account-btn" type="button" onclick="openAccountPanel()">Account</button><button class="data-tools-btn" type="button" onclick="openDataTools()">Data & Audit</button><span id="loggedInUser">Signed in</span><div class="avatar" id="userAvatar">U</div><button class="logout-btn" onclick="logoutUser()">Log out</button></div></header><section class="content" id="content"></section></main>
 </div>
 
 <div class="modal" id="modal"><div class="modalbox" id="modalbox"></div></div><div class="toast" id="toast"></div><div class="lightbox" id="imageLightbox" onclick="closeImagePreview()"><a class="btn secondary lightbox-download" id="lightboxDownload" href="#" download onclick="event.stopPropagation()">Download image</a><button class="lightbox-close" onclick="event.stopPropagation();closeImagePreview()">✕</button><img id="lightboxImg" alt="Image preview" onclick="event.stopPropagation()"></div>
@@ -3020,19 +3028,23 @@ function dropJob(e){
   toast(id+" added to planner");
 }
 function showApp(username){
+  if(!c360Access?.membership?.is_active||c360Access.organisation?.status!=="active"||c360Access.organisation?.workspace_mode!=="prototype")return;
+  if(!content.dataset.workspaceLoaded){loadClients();content.innerHTML=dashboard();content.dataset.workspaceLoaded="true";setTimeout(setupWeatherWidget,0)}
   document.getElementById("loginScreen").style.display="none";
   document.getElementById("mainApp").style.display="flex";
   if(username)document.getElementById("loggedInUser").textContent=username;
 }
 function showLogin(){
+  document.getElementById("modal")?.classList.remove("show");
+  const oldContent=document.getElementById("content");if(oldContent){oldContent.innerHTML="";delete oldContent.dataset.workspaceLoaded;}
   document.getElementById("mainApp").style.display="none";
   document.getElementById("loginScreen").style.display="grid";
   setTimeout(()=>document.getElementById("loginUser")?.focus(),0);
 }
 const content=document.getElementById("content"), modal=document.getElementById("modal"), modalbox=document.getElementById("modalbox");
 const pages={dashboard, jobs:jobsPage, planner,clients:clientsPage, staff:staffPage, chat:chatPage, rams:ramsPage, inspections:inspectionsPage, vehicles, equipment, builder,timesheets:timesheetsPage,training:trainingPage};
-document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");content.innerHTML=pages[b.dataset.page]();if(b.dataset.page==='dashboard')setTimeout(setupWeatherWidget,0)});
-loadClients();content.innerHTML=dashboard();setTimeout(setupWeatherWidget,0);
+document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>{if(!c360Access?.membership?.is_active||c360Access.organisation?.status!=="active"||c360Access.organisation?.workspace_mode!=="prototype")return;document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");content.innerHTML=pages[b.dataset.page]();if(b.dataset.page==='dashboard')setTimeout(setupWeatherWidget,0)});
+// Prototype data is loaded only after authenticated workspace routing.
 document.getElementById("globalSearch").addEventListener("input",e=>{if(e.target.value.toLowerCase().includes("brighton")){toast("Found 123001 · Brighton Marina")}});
 initialiseSupabaseAuth();
 window.addEventListener("error",e=>{console.error("Construct360 prototype error:",e.error||e.message);});

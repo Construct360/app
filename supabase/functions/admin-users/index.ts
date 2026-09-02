@@ -1,77 +1,36 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { context, response, rpc, sendReservedInvite, HttpError } from "../_shared/platform.ts";
 
-const corsHeaders={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS"};
 const roles=new Set(["admin","operations","supervisor","operative"]);
-const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,"Content-Type":"application/json"}});
 const staffRole=(role:string)=>role==="supervisor"?"Scaffold Supervisor":role==="operative"?"Operative":null;
 
 Deno.serve(async(req)=>{
-  if(req.method==="OPTIONS")return new Response("ok",{headers:corsHeaders});
+  const json=(body:unknown,status=200)=>response(req,body,status);
+  if(req.method==="OPTIONS")return json({ok:true});
   if(req.method!=="POST")return json({error:"Method not allowed"},405);
   try{
-    const url=Deno.env.get("SUPABASE_URL")!;
-    const serviceRole=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const appUrl=Deno.env.get("APP_URL")||req.headers.get("origin")||"";
-    const authHeader=req.headers.get("Authorization")||"";
-    const token=authHeader.replace(/^Bearer\s+/i,"");
-    if(!token)return json({error:"Authentication required"},401);
-    const admin=createClient(url,serviceRole,{auth:{autoRefreshToken:false,persistSession:false}});
-    const {data:{user},error:userError}=await admin.auth.getUser(token);
-    if(userError||!user)return json({error:"Invalid or expired session"},401);
-    const {data:caller,error:callerError}=await admin.from("organisation_memberships").select("organisation_id,role,is_active").eq("user_id",user.id).maybeSingle();
-    if(callerError||!caller||!caller.is_active||caller.role!=="admin")return json({error:"Admin access required"},403);
+    const ctx=await context(req);
+    const {admin,user}=ctx;
+    const organisation_id=await rpc(ctx,"current_organisation_id");
+    if(!organisation_id||!await rpc(ctx,"is_org_admin",{p_org:organisation_id}))return json({error:"Active company Admin access required"},403);
+    const caller={organisation_id};
     const body=await req.json();const action=String(body.action||"");
 
     if(action==="invite"){
-      const email=String(body.email||"").trim().toLowerCase();const full_name=String(body.full_name||"").trim();const role=String(body.role||"operative");
-      if(!email.includes("@")||!full_name||!roles.has(role))return json({error:"Valid name, email and role are required"},400);
-      const linkedRole=staffRole(role);
-      if(linkedRole){
-        const {error:staffTableError}=await admin.from("staff_members").select("id").limit(1);
-        if(staffTableError)return json({error:"Staff setup is incomplete. Run migration 002_linked_staff_members.sql before inviting an Operative or Supervisor."},503);
-      }
-
-      console.log("[admin-users] invite requested",{actor_user_id:user.id,organisation_id:caller.organisation_id,role});
-      const {data:userPage,error:listUsersError}=await admin.auth.admin.listUsers({page:1,perPage:1000});
-      if(listUsersError)throw listUsersError;
-      const existingUser=userPage.users.find(candidate=>candidate.email?.trim().toLowerCase()===email);
-      if(existingUser){
-        const incompleteInvite=existingUser.user_metadata?.needs_password_setup===true;
-        if(existingUser.email_confirmed_at&&!incompleteInvite)return json({error:"An active account already exists for this email. Ask the user to sign in or reset their password."},409);
-        const {error:cleanupError}=await admin.auth.admin.deleteUser(existingUser.id,false);
-        if(cleanupError)throw new Error(`A previous incomplete invitation exists and could not be replaced: ${cleanupError.message}`);
-        console.log("[admin-users] removed incomplete invite before retry",{target_user_id:existingUser.id});
-      }
-
-      let invitedUserId="";
-      try{
-        const redirectTo=appUrl?`${appUrl.replace(/\/$/,"")}/?auth=invite`:undefined;
-        const {data:invited,error:inviteError}=await admin.auth.admin.inviteUserByEmail(email,{redirectTo,data:{full_name,needs_password_setup:true}});
-        if(inviteError)throw inviteError;
-        const invitedUser=invited.user;if(!invitedUser)throw new Error("Invite did not create a user");
-        invitedUserId=invitedUser.id;
-
-        const {error:profileError}=await admin.from("profiles").upsert({id:invitedUser.id,email,full_name},{onConflict:"id"});
-        if(profileError)throw profileError;
-        const {error:membershipError}=await admin.from("organisation_memberships").insert({organisation_id:caller.organisation_id,user_id:invitedUser.id,role,is_active:true,created_by:user.id});
-        if(membershipError)throw membershipError;
-        if(linkedRole){
-          const {error:staffError}=await admin.from("staff_members").upsert({organisation_id:caller.organisation_id,user_id:invitedUser.id,full_name,email,employment_role:linkedRole,team_name:"Unassigned",qualification:"None",availability:"Available",is_active:true,created_by:user.id},{onConflict:"user_id"});
-          if(staffError)throw staffError;
-        }
-        const {error:activityError}=await admin.from("user_activity_log").insert({organisation_id:caller.organisation_id,actor_user_id:user.id,event_type:"user_invited",description:`Invited ${email} as ${role}`,metadata:{target_user_id:invitedUser.id}});
-        if(activityError)console.warn("[admin-users] invite activity log failed",{target_user_id:invitedUser.id,message:activityError.message});
-        console.log("[admin-users] invite completed",{target_user_id:invitedUser.id,organisation_id:caller.organisation_id,role});
-        return json({ok:true,user_id:invitedUser.id});
-      }catch(inviteSetupError){
-        if(invitedUserId){
-          const {error:rollbackError}=await admin.auth.admin.deleteUser(invitedUserId,false);
-          if(rollbackError)console.error("[admin-users] invite rollback failed",{target_user_id:invitedUserId,message:rollbackError.message});
-          else console.log("[admin-users] rolled back failed invite",{target_user_id:invitedUserId});
-        }
-        throw inviteSetupError;
-      }
+      const invitationId=await rpc(ctx,"prepare_company_user_invite",{
+        p_email:String(body.email||""),p_full_name:String(body.full_name||""),p_role:String(body.role||"operative")
+      });
+      const user_id=await sendReservedInvite(ctx,invitationId);
+      return json({ok:true,user_id});
     }
+    if(!["update-role","set-active","delete-user"].includes(action))return json({error:"Unknown action"},400);
+    const targetUser=String(body.user_id||"");
+    if(targetUser===user.id)return json({error:"You cannot change or delete your own Admin access"},400);
+    const {data:targetMember,error:targetError}=await admin.from("organisation_memberships").select("user_id").eq("organisation_id",caller.organisation_id).eq("user_id",targetUser).maybeSingle();
+    if(targetError)throw targetError;
+    if(!targetMember)return json({error:"User is not in this company"},404);
+    const {data:platformAdmin,error:platformError}=await admin.from("platform_admins").select("user_id").eq("user_id",targetUser).maybeSingle();
+    if(platformError)throw platformError;
+    if(platformAdmin)return json({error:"Platform Administrator accounts cannot be changed through company user management"},403);
 
     if(action==="update-role"){
       const target=String(body.user_id||"");const role=String(body.role||"");if(!target||!roles.has(role))return json({error:"Valid user and role required"},400);
@@ -95,7 +54,7 @@ Deno.serve(async(req)=>{
     }
 
     if(action==="set-active"){
-      const target=String(body.user_id||"");const is_active=Boolean(body.is_active);if(!target)return json({error:"User required"},400);if(target===user.id)return json({error:"You cannot disable your own Admin account"},400);
+      const target=String(body.user_id||"");const is_active=body.is_active;if(typeof is_active!=="boolean")return json({error:"Active status must be true or false"},400);if(!target)return json({error:"User required"},400);if(target===user.id)return json({error:"You cannot disable your own Admin account"},400);
       const {data:m}=await admin.from("organisation_memberships").select("role,is_active").eq("organisation_id",caller.organisation_id).eq("user_id",target).maybeSingle();if(!m)return json({error:"User is not in this company"},404);
       if(!is_active&&m.role==="admin"){
         const {count}=await admin.from("organisation_memberships").select("id",{count:"exact",head:true}).eq("organisation_id",caller.organisation_id).eq("role","admin").eq("is_active",true);
@@ -122,8 +81,12 @@ Deno.serve(async(req)=>{
       await admin.from("user_activity_log").insert({organisation_id:caller.organisation_id,actor_user_id:user.id,event_type:"user_permanently_deleted",description:`Permanently deleted ${profile?.email||target}`,metadata:{target_user_id:target,target_email:profile?.email||null,target_name:profile?.full_name||null}});
       const {error:deleteError}=await admin.auth.admin.deleteUser(target,false);
       if(deleteError)throw deleteError;
+      if(profile?.email){
+        const {error:invitationError}=await admin.from("organisation_invitations").delete().eq("organisation_id",caller.organisation_id).eq("email",profile.email.toLowerCase()).eq("initial_admin",false);
+        if(invitationError)throw invitationError;
+      }
       return json({ok:true});
     }
     return json({error:"Unknown action"},400);
-  }catch(e){console.error(e);return json({error:e instanceof Error?e.message:"Unexpected server error"},500)}
+  }catch(e){console.error(e);return json({error:e instanceof Error?e.message:"Unexpected server error"},e instanceof HttpError?e.status:500)}
 });

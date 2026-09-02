@@ -1,6 +1,6 @@
 {
   "name": "construct360-app",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Construct360 scaffold management application",
   "engines": { "node": ">=20" }

@@ -94,6 +94,8 @@ function switchAuthView(name){
   document.querySelectorAll("#authTabs button").forEach(x=>x.classList.toggle("active",x.dataset.authView===name));
   const tabs=document.getElementById("authTabs");if(tabs)tabs.style.display=["signin","signup"].includes(name)?"flex":"none";
   const titles={signin:["Sign in to Construct360","Secure access to your company workspace."],signup:["Create your account","Start with a verified work email."],forgot:["Reset your password","We’ll email you a secure recovery link."],reset:["Choose a new password","Your recovery link has been verified."],"invite-password":["Secure your invited account","Choose a password for future sign-ins."],onboarding:["Create your company workspace","The first verified user becomes the company Admin."],disabled:["Access unavailable","Your account is signed in but not active."],verify:["Verify your email","One final step before using Construct360."]};
+  titles.onboarding=["Company invitation needed","Your account needs a company workspace assignment."];
+  titles["workspace-setup"]=["Welcome to your company","Your own Construct360 workspace."];
   const t=titles[name]||titles.signin;
   const h=document.getElementById("authHeading"),s=document.getElementById("authSubheading");if(h)h.textContent=t[0];if(s)s.textContent=t[1];
   setAuthMessage("");
@@ -192,25 +194,22 @@ async function logoutUser(){
   const pw=document.getElementById("loginPassword");if(pw)pw.value="";
 }
 async function createCompanyWorkspace(){
-  const sb=authClient();if(!sb)return;
-  const name=(document.getElementById("onboardingCompany")?.value||"").trim();
-  if(name.length<2){setAuthMessage("Enter your company name.");return}
-  setAuthLoading(true,"Creating company workspace…");
-  const {error}=await sb.rpc("create_organisation_and_admin",{p_name:name});setAuthLoading(false);
-  if(error){setAuthMessage(normaliseAuthError(error));return}
-  await routeAuthenticatedUser();
+  setAuthMessage("New companies are created through Construct360 Platform Administration.","info");
 }
 async function fetchCurrentAccess(){
   const sb=authClient();
   const {data:{user},error:ue}=await sb.auth.getUser();if(ue||!user)return {user:null};
-  const [{data:profile,error:pe},{data:membership,error:me}]=await Promise.all([
+  const [{data:profile,error:pe},{data:membership,error:me},{data:isPlatformAdmin,error:ae}]=await Promise.all([
     sb.from("profiles").select("id,email,full_name,avatar_url").eq("id",user.id).maybeSingle(),
-    sb.from("organisation_memberships").select("id,organisation_id,role,is_active,organisations(id,name,slug)").eq("user_id",user.id).maybeSingle()
+    sb.from("organisation_memberships").select("id,organisation_id,role,is_active,organisations(id,name,slug,status,workspace_mode)").eq("user_id",user.id).maybeSingle(),
+    sb.rpc("is_platform_admin")
   ]);
-  if(pe)throw pe;if(me)throw me;
-  return {user,profile,membership,organisation:membership?.organisations||null};
+  if(pe)throw pe;if(me)throw me;if(ae)throw ae;
+  return {user,profile,membership,isPlatformAdmin:Boolean(isPlatformAdmin),organisation:membership?.organisations||null};
 }
 async function syncLinkedStaffFromSupabase(){
+  // Setup-only companies must never write into the legacy browser-local prototype.
+  if(c360Access?.organisation?.workspace_mode!=="prototype")return;
   if(!c360Access?.membership?.organisation_id||!Array.isArray(window.staff||staff))return;
   const {data,error}=await authClient().from("staff_members").select("id,user_id,full_name,email,employment_role,team_name,qualification,availability,is_active").eq("organisation_id",c360Access.membership.organisation_id).order("created_at");
   if(error){console.warn("Linked staff could not be loaded",error);return}
@@ -230,8 +229,21 @@ async function routeAuthenticatedUser(){
     if(session.user?.user_metadata?.needs_password_setup){setAuthLoading(false);showLogin();switchAuthView("invite-password");setInviteFormState("ready",session.user);return}
     c360Access=await fetchCurrentAccess();setAuthLoading(false);
     if(!c360Access.user){showLogin();switchAuthView("signin");return}
+    if(c360Access.isPlatformAdmin&&(new URL(location.href).searchParams.get("next")==="platform"||!c360Access.membership)){location.replace("/platform");return}
     if(!c360Access.membership){showLogin();switchAuthView("onboarding");return}
-    if(!c360Access.membership.is_active){showLogin();switchAuthView("disabled");return}
+    if(!c360Access.membership.is_active||c360Access.organisation?.status!=="active"){
+      showLogin();switchAuthView("disabled");
+      document.getElementById("disabledPlatformLink").hidden=!c360Access.isPlatformAdmin;
+      return;
+    }
+    if(c360Access.organisation.workspace_mode!=="prototype"){
+      showLogin();switchAuthView("workspace-setup");
+      document.getElementById("setupCompanyName").textContent=c360Access.organisation.name;
+      document.getElementById("setupCompanyEmail").textContent=c360Access.user.email;
+      document.getElementById("setupCompanyRole").textContent=c360Access.membership.role;
+      document.getElementById("setupManageUsers").hidden=c360Access.membership.role!=="admin";
+      return;
+    }
     await syncLinkedStaffFromSupabase();
     applyAccessToUi();showApp(c360Access.profile?.full_name||c360Access.user.email);await logAppActivity("session_ready","Signed in to Construct360");
   }catch(e){setAuthLoading(false);console.error(e);showLogin();switchAuthView("signin");setAuthMessage("Your company access could not be loaded. Try signing in again.");}
@@ -242,6 +254,7 @@ function applyAccessToUi(){
   document.getElementById("loggedInUser").textContent=display;
   const av=document.getElementById("userAvatar");if(av)av.textContent=display.split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase()||"U";
   const admin=document.getElementById("adminUsersBtn");if(admin)admin.style.display=c360Access.membership?.role==="admin"?"inline-block":"none";
+  const platform=document.getElementById("platformAdminBtn");if(platform)platform.hidden=!c360Access.isPlatformAdmin;
 }
 async function logAppActivity(event_type,description,metadata={}){
   try{
@@ -318,7 +331,8 @@ async function callAdminFunction(body){
   return data;
 }
 async function openAdminUsers(){
-  if(c360Access?.membership?.role!=="admin"){toast("Admin access required");return}
+  c360Access=await fetchCurrentAccess();
+  if(c360Access?.membership?.role!=="admin"||!c360Access.membership.is_active||c360Access.organisation?.status!=="active"){toast("Active company Admin access required");await routeAuthenticatedUser();return}
   modalbox.innerHTML=`<div class="modalhead"><div><h2 style="margin:0">Users & access</h2><div class="sub">Invite users, assign roles and control company access.</div></div><button class="close" onclick="closeModal()">✕</button></div><div id="adminUsersContent" style="margin-top:14px"><div class="muted">Loading users…</div></div>`;modal.classList.add("show");await refreshAdminUsers();
 }
 async function refreshAdminUsers(){

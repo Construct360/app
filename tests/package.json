@@ -1,0 +1,7 @@
+{
+  "name": "construct360-foundation-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node platform-foundation.test.mjs && node edge-handlers.test.mjs"},
+  "devDependencies": {"@electric-sql/pglite": "0.3.14", "typescript": "5.9.3"}
+}
