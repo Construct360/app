@@ -31,7 +31,7 @@ function renderPlatformCompanies() {
     return `<article class="company-card"><div class="card-heading"><h2>${platformEscape(c.name)}</h2><span class="badge ${c.status === 'suspended' ? 'suspended' : ''}">${platformEscape(c.status)}</span></div>
       <dl class="company-details"><div><dt>First Admin</dt><dd>${platformEscape(c.admin_name || 'Existing company')}<br>${platformEscape(c.admin_email || 'Manage users in the company workspace')}</dd></div>
       <div><dt>Invitation</dt><dd>${platformEscape(c.invitation_status || 'Existing account')}</dd></div><div><dt>Users</dt><dd>${Number(c.user_count)}</dd></div>
-      <div><dt>Workspace</dt><dd>${c.workspace_mode === 'prototype' ? 'Existing prototype' : 'Account setup only'}</dd></div></dl>
+      <div><dt>Workspace</dt><dd>Clients &amp; Jobs${c.workspace_mode === 'prototype' ? ' + legacy prototype' : ''}</dd></div></dl>
       ${c.last_error ? `<p class="message error">${platformEscape(c.last_error)}</p>` : ''}
       <div class="company-actions">${resend ? `<button class="secondary" data-action="resend" data-id="${platformEscape(c.id)}">Resend invitation</button>` : ''}
       ${!c.is_own_company ? `<button class="${c.status === 'active' ? 'danger' : 'secondary'}" data-action="status" data-id="${platformEscape(c.id)}">${c.status === 'active' ? 'Suspend company' : 'Activate company'}</button>` : '<span class="badge">Your company</span>'}</div></article>`;

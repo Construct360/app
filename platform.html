@@ -11,7 +11,7 @@
     <section id="platformAccess" role="status" class="access-card"><h1>Checking your access…</h1><p>This area is restricted to Construct360 Platform Administrators.</p></section>
     <section id="platformContent" hidden>
       <div class="page-heading"><div><p class="eyebrow">CONSTRUCT360 CONTROL CENTRE</p><h1>Companies</h1><p>Manage company accounts and their first Admin invitations.</p></div><button id="addCompany">+ Add company</button></div>
-      <div class="notice"><strong>Foundation release · v11</strong><br>New companies have isolated account setup and user management. Jobs, clients and other operational modules are not released for new companies yet. Activating a company does not unlock those modules.</div>
+      <div class="notice"><strong>Clients &amp; Jobs release · v12</strong><br>Active company Admins and Operations users have company-specific Clients, contacts and Jobs. Other operational modules and Supervisor/Operative permissions are still being developed.</div>
       <div id="platformMessage" class="message" role="status" aria-live="polite" hidden></div>
       <div id="companyStats" class="stats"></div>
       <div class="filters"><label>Find a company<input id="companySearch" type="search" placeholder="Company name or Admin email"></label><label>Status<select id="companyFilter"><option value="all">All companies</option><option value="active">Active</option><option value="suspended">Suspended</option></select></label><button id="refreshCompanies" class="secondary">Refresh</button></div>
@@ -25,13 +25,13 @@
     <label>Company name<input name="name" required minlength="2" maxlength="160" autocomplete="organization"></label>
     <label>First Admin’s full name<input name="admin_name" required maxlength="120" autocomplete="name"></label>
     <label>First Admin’s email<input name="admin_email" type="email" required maxlength="254" autocomplete="email"></label>
-    <p class="notice">The Admin will accept the invitation, set a password and see their own company setup page.</p>
+    <p class="notice">The Admin will accept the invitation, set a password and open their own company workspace.</p>
     <div id="companyFormError" class="message error" role="alert" hidden></div>
     <button id="createCompany" type="submit">Create company &amp; send invitation</button>
   </form></dialog>
   <dialog id="statusDialog" aria-labelledby="statusDialogTitle"><form id="statusForm">
     <h2 id="statusDialogTitle">Change company status</h2><p id="statusDialogMessage"></p>
-    <p class="notice">Suspension blocks company data and user-management access. Activating a company keeps new workspaces in account setup.</p>
+    <p class="notice">Suspension blocks company data and user-management access. Activation restores access according to each user's role.</p>
     <div class="company-actions"><button type="button" id="cancelStatus" class="secondary">Cancel</button><button type="submit" id="confirmStatus">Confirm change</button></div>
   </form></dialog>
   <script src="/api/config.js"></script>

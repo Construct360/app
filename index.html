@@ -818,7 +818,7 @@ img{max-width:100%;height:auto}
     <div class="auth-view" id="auth-workspace-setup">
       <div class="auth-message success show"><strong id="setupCompanyName"></strong><br>Your company account is ready.</div>
       <p class="login-sub"><span id="setupCompanyEmail"></span> · <span id="setupCompanyRole"></span></p>
-      <div class="auth-setup-block">Your company's operational workspace is being prepared. Jobs, clients and other modules are not available yet. You will not see another company's prototype data.</div>
+      <div class="auth-setup-block">Your company account is ready. Clients and Jobs are available to company Admins and Operations users. Supervisor and Operative access will be enabled in a later role-permissions release. You will not see another company's prototype data.</div>
       <button id="setupManageUsers" class="btn" style="width:100%;margin-top:16px" onclick="openAdminUsers()">Manage company users</button>
       <button class="btn secondary" style="width:100%;margin-top:10px" onclick="openAccountPanel()">My account</button>
       <button class="login-link" style="display:block;margin:14px auto" onclick="routeAuthenticatedUser()">Check workspace status</button>
@@ -866,6 +866,7 @@ img{max-width:100%;height:auto}
 <script src="/api/config.js" onerror="this.onerror=null;this.src='config.js'"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="auth.js"></script>
+<script src="legacy-transfer.js"></script>
 
 <script>
 const APP_META={name:"Construct360",version:"1.0.0-rc.1",environment:"auth-development",storageSchema:1};
@@ -963,6 +964,8 @@ function openDataTools(){
   modalbox.innerHTML=`<div class="modalhead"><div><h2 style="margin:0">Data & Audit</h2><div class="sub">Prototype data safety tools · ${APP_META.environment} v${APP_META.version}</div></div><button class="close" onclick="closeModal()">✕</button></div>
   <div class="prototype-warning"><b>Authentication is server-backed when Supabase is connected.</b> Operational Construct360 records in this legacy prototype are still primarily browser-stored. Do not treat business-data storage as production-ready until those modules are migrated to Supabase tables/storage with RLS.</div>
   <div class="data-tool-actions">
+    <a class="btn secondary" href="/workspace">Open saved company workspace</a>
+    <button class="btn secondary" onclick="exportLegacyClientsJobs()">Export Clients & Jobs for v12</button>
     <button class="btn" onclick="exportPrototypeBackup()">Export backup</button>
     <label class="btn secondary" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer">Import backup<input type="file" accept=".json,application/json" style="display:none" onchange="importPrototypeBackup(this)"></label>
   </div>
@@ -3028,6 +3031,7 @@ function dropJob(e){
   toast(id+" added to planner");
 }
 function showApp(username){
+  document.querySelector('.env-badge').textContent='LEGACY PROTOTYPE';
   if(!c360Access?.membership?.is_active||c360Access.organisation?.status!=="active"||c360Access.organisation?.workspace_mode!=="prototype")return;
   if(!content.dataset.workspaceLoaded){loadClients();content.innerHTML=dashboard();content.dataset.workspaceLoaded="true";setTimeout(setupWeatherWidget,0)}
   document.getElementById("loginScreen").style.display="none";

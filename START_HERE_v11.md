@@ -1,5 +1,7 @@
 # Construct360 v11 — Platform Administration foundation
 
+Historical v11 instructions. If v11 is already installed and tested, follow **START_HERE_v12.md** instead. Do not repeat the foundation setup to install v12.
+
 Prepared for sam.gerrie@construct-360.co.uk. One company workspace per user account.
 
 ## What this release does
@@ -44,7 +46,7 @@ Confirm that `sam.gerrie@construct-360.co.uk` already exists in Supabase Authent
 
 In a separate SQL Editor query, paste and run:
 
-`supabase/setup/004_bootstrap_sam_platform_admin.sql`
+`supabase/setup/004_bootstrap_sam_platform_admin.sql`     
 
 This explicitly grants that existing account platform access. It does not store a password and does not automatically promote future sign-ups with that email. If the account is absent or unverified, it stops without applying changes.
 

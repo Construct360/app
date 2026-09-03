@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><title>Workspace | Construct360</title>
+  <link rel="stylesheet" href="/workspace.css">
+</head>
+<body>
+  <section id="accessState" class="access-state" role="status"><img src="/assets/construct360-logo-primary.png" alt="Construct360" width="300" height="66"><h1>Opening your workspace…</h1><p>Checking company access and loading saved records.</p></section>
+  <div id="workspaceApp" class="shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="/workspace"><img src="/assets/construct360-logo-primary.png" alt="Construct360" width="250" height="55"></a>
+      <div class="company-label"><span class="eyebrow">YOUR COMPANY</span><strong id="companyName"></strong><span class="role-label" id="companyRole"></span></div>
+      <nav aria-label="Workspace"><button data-page="overview" class="active"><span>◈</span>Overview</button><button data-page="jobs"><span>▤</span>Jobs</button><button data-page="clients"><span>▦</span>Clients</button></nav>
+      <div class="coming-next"><span class="eyebrow">COMING NEXT</span><p>Staff &amp; teams<br>Planner &amp; timesheets<br>Documents &amp; inspections<br>Vehicles &amp; equipment</p></div>
+      <div class="sidebar-foot"><span class="live-dot"></span> Company-specific storage<br><small>Clients &amp; Jobs · v12</small><a id="legacyLink" href="/?legacy=1" hidden>Open legacy prototype ↗</a></div>
+    </aside>
+    <div class="main-column">
+      <header class="topbar"><div><span class="eyebrow">COMPANY WORKSPACE</span><div id="loggedInUser"></div></div><div class="top-actions"><button id="platformAdminBtn" class="secondary" hidden>Platform</button><button id="adminUsersBtn" class="secondary">Users</button><button id="accountButton" class="secondary">Account</button><button id="signOut" class="text-button">Sign out</button></div></header>
+      <main id="main"><div id="workspaceMessage" role="status" aria-live="polite" hidden></div>
+        <div class="page-heading"><div><p class="eyebrow">BUILD WITH CLARITY</p><h1 id="pageTitle">Overview</h1><p id="pageSubtitle">Your clients and jobs, in one place.</p></div><div class="actions"><button id="transferButton" class="secondary" hidden>Import / export</button><button id="refreshButton" class="secondary">Refresh</button><button id="addButton">+ New job</button></div></div>
+        <section id="stats" class="stats"></section>
+        <div id="filters" class="filters" hidden><label class="search-label">Search<input id="recordSearch" type="search" placeholder="Search records…"></label><label>View<select id="archiveFilter"><option value="active">Current records</option><option value="archived">Archived records</option><option value="all">All records</option></select></label><label id="statusFilterLabel" hidden>Job status<select id="statusFilter"><option value="all">All statuses</option></select></label><label id="clientFilterLabel" hidden>Client<select id="clientFilter"><option value="all">All clients</option></select></label></div>
+        <section id="records" aria-live="polite"></section>
+        <p class="scope-note">This release saves Clients, contacts and Jobs to your company. Staff scheduling, files, RAMS and other modules are not connected here yet.</p>
+      </main>
+    </div>
+  </div>
+  <dialog id="editor" aria-labelledby="editorTitle"><form id="recordForm"><div class="modalhead"><div><p class="eyebrow" id="editorCode"></p><h2 id="editorTitle"></h2></div><button type="button" class="close" id="closeEditor" aria-label="Close form">✕</button></div><div id="editorFields"></div><div id="formError" class="error-box" role="alert" hidden></div><div class="form-footer"><span>Saves to your company only.</span><button type="button" id="cancelEditor" class="secondary">Cancel</button><button type="submit" id="saveRecord">Save</button></div></form></dialog>
+  <dialog id="confirmDialog" aria-labelledby="confirmTitle"><h2 id="confirmTitle"></h2><p id="confirmText"></p><div id="confirmError" class="error-box" role="alert" hidden></div><div class="actions"><button id="cancelConfirm" class="secondary">Cancel</button><button id="confirmAction">Confirm</button></div></dialog>
+  <dialog id="transferDialog" aria-labelledby="transferTitle"><div class="modalhead"><h2 id="transferTitle">Import / export</h2><button id="closeTransfer" class="close" aria-label="Close import and export">✕</button></div><p>Transfer Clients, their contacts and Jobs for <strong id="transferCompany"></strong>.</p><h3>Download saved records</h3><p>Includes archived records. Does not include users, files, staff, passwords or other modules.</p><button id="exportButton" class="secondary">Download Clients &amp; Jobs</button><hr><h3>Review an import</h3><p>Choose a Construct360 transfer file exported for this company. Import adds records only; existing client or job codes will stop the entire import. Nothing is overwritten.</p><input id="importFile" type="file" accept=".json,application/json" aria-label="Choose Construct360 transfer file"><div id="importPreview"></div><div id="importError" class="error-box" role="alert" hidden></div><label id="importCheckLabel" class="check-label" hidden><input type="checkbox" id="importCheck">I have checked the company, records and any prototype demonstration data.</label><button id="importButton" disabled>Import reviewed records</button></dialog>
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-label="Account and users"><div id="modalbox" class="modalbox"></div></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/api/config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script><script src="/auth.js"></script><script src="/workspace.js"></script>
+</body>
+</html>

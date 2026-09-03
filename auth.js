@@ -209,7 +209,7 @@ async function fetchCurrentAccess(){
 }
 async function syncLinkedStaffFromSupabase(){
   // Setup-only companies must never write into the legacy browser-local prototype.
-  if(c360Access?.organisation?.workspace_mode!=="prototype")return;
+  if(c360Access?.organisation?.workspace_mode!=="prototype"||location.pathname.startsWith('/workspace'))return;
   if(!c360Access?.membership?.organisation_id||!Array.isArray(window.staff||staff))return;
   const {data,error}=await authClient().from("staff_members").select("id,user_id,full_name,email,employment_role,team_name,qualification,availability,is_active").eq("organisation_id",c360Access.membership.organisation_id).order("created_at");
   if(error){console.warn("Linked staff could not be loaded",error);return}
@@ -236,6 +236,8 @@ async function routeAuthenticatedUser(){
       document.getElementById("disabledPlatformLink").hidden=!c360Access.isPlatformAdmin;
       return;
     }
+    const legacyRequested=c360Access.organisation.workspace_mode==='prototype'&&new URL(location.href).searchParams.get('legacy')==='1';
+    if(['admin','operations'].includes(c360Access.membership.role)&&!legacyRequested){location.replace('/workspace');return}
     if(c360Access.organisation.workspace_mode!=="prototype"){
       showLogin();switchAuthView("workspace-setup");
       document.getElementById("setupCompanyName").textContent=c360Access.organisation.name;
