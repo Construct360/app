@@ -19,8 +19,10 @@
       <header class="topbar"><div><span class="eyebrow">COMPANY WORKSPACE</span><div id="loggedInUser"></div></div><div class="top-actions"><button id="platformAdminBtn" class="secondary" hidden>Platform</button><button id="adminUsersBtn" class="secondary">Users</button><button id="accountButton" class="secondary">Account</button><button id="signOut" class="text-button">Sign out</button></div></header>
       <main id="main"><div id="workspaceMessage" role="status" aria-live="polite" hidden></div>
         <div class="page-heading"><div><p class="eyebrow">BUILD WITH CLARITY</p><h1 id="pageTitle">Overview</h1><p id="pageSubtitle">Your clients and jobs, in one place.</p></div><div class="actions"><button id="transferButton" class="secondary" hidden>Import / export</button><button id="refreshButton" class="secondary">Refresh</button><button id="addButton">+ New job</button></div></div>
-        <section id="stats" class="stats"></section>
-        <section id="weatherPanel" hidden aria-label="Local weather"></section>
+        <div id="overviewSummary" class="overview-summary" hidden>
+          <section id="stats" class="stats" aria-label="Job summary"></section>
+          <section id="weatherPanel" hidden aria-label="Local weather"></section>
+        </div>
         <div id="filters" class="filters" hidden><label class="search-label">Search<input id="recordSearch" type="search" placeholder="Search records…"></label><label>View<select id="archiveFilter"><option value="active">Current records</option><option value="archived">Archived records</option><option value="all">All records</option></select></label><label id="statusFilterLabel" hidden>Job status<select id="statusFilter"><option value="all">All statuses</option></select></label><label id="clientFilterLabel" hidden>Client<select id="clientFilter"><option value="all">All clients</option></select></label></div>
         <section id="operationsToolbar" hidden></section>
         <section id="records" aria-live="polite"></section>

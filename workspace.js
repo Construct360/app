@@ -61,6 +61,7 @@ function dateLabel(value){return value?new Intl.DateTimeFormat('en-GB',{day:'num
 function dateRange(job){return !job.start_date&&!job.end_date?'Dates not set':`${dateLabel(job.start_date)} → ${dateLabel(job.end_date)}`}
 function setPage(page){currentPage=page;$('recordSearch').value='';$('archiveFilter').value='active';$('statusFilter').value='all';$('clientFilter').value='all';render()}
 function render(){
+  $('overviewSummary').hidden=currentPage!=='overview'||!isManager();
   renderWeatherPanel();
   $('operationsToolbar').hidden=true;
   $('addButton').hidden=!isManager();
