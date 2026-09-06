@@ -11,9 +11,9 @@
     <aside class="sidebar">
       <a class="brand" href="/workspace"><img src="/assets/construct360-logo-primary.png" alt="Construct360" width="250" height="55"></a>
       <div class="company-label"><span class="eyebrow">YOUR COMPANY</span><strong id="companyName"></strong><span class="role-label" id="companyRole"></span></div>
-      <nav aria-label="Workspace"><button data-page="overview" class="active"><span>◈</span>Overview</button><button data-page="jobs"><span>▤</span>Jobs</button><button data-page="clients"><span>▦</span>Clients</button></nav>
-      <div class="coming-next"><span class="eyebrow">COMING NEXT</span><p>Staff &amp; teams<br>Planner &amp; timesheets<br>Documents &amp; inspections<br>Vehicles &amp; equipment</p></div>
-      <div class="sidebar-foot"><span class="live-dot"></span> Company-specific storage<br><small>Clients &amp; Jobs · v12</small><a id="legacyLink" href="/?legacy=1" hidden>Open legacy prototype ↗</a></div>
+      <nav aria-label="Workspace"><button data-page="overview" class="active"><span>◈</span>Overview</button><button data-page="planner"><span>▣</span>Planner</button><button data-page="jobs"><span>▤</span>Jobs</button><button data-page="clients" data-manager><span>▦</span>Clients</button><button data-page="staff" data-manager><span>♙</span>Staff</button><button data-page="teams" data-manager><span>♧</span>Teams</button><button data-page="permissions" data-manager><span>◇</span>Access guide</button></nav>
+      <div class="coming-next"><span class="eyebrow">COMING NEXT</span><p>Timesheets &amp; inspections<br>Documents &amp; RAMS<br>Vehicles &amp; equipment</p></div>
+      <div class="sidebar-foot"><span class="live-dot"></span> Company-specific storage<br><small>Operations workspace · v13</small><a id="legacyLink" href="/?legacy=1" hidden>Open legacy prototype ↗</a></div>
     </aside>
     <div class="main-column">
       <header class="topbar"><div><span class="eyebrow">COMPANY WORKSPACE</span><div id="loggedInUser"></div></div><div class="top-actions"><button id="platformAdminBtn" class="secondary" hidden>Platform</button><button id="adminUsersBtn" class="secondary">Users</button><button id="accountButton" class="secondary">Account</button><button id="signOut" class="text-button">Sign out</button></div></header>
@@ -21,8 +21,9 @@
         <div class="page-heading"><div><p class="eyebrow">BUILD WITH CLARITY</p><h1 id="pageTitle">Overview</h1><p id="pageSubtitle">Your clients and jobs, in one place.</p></div><div class="actions"><button id="transferButton" class="secondary" hidden>Import / export</button><button id="refreshButton" class="secondary">Refresh</button><button id="addButton">+ New job</button></div></div>
         <section id="stats" class="stats"></section>
         <div id="filters" class="filters" hidden><label class="search-label">Search<input id="recordSearch" type="search" placeholder="Search records…"></label><label>View<select id="archiveFilter"><option value="active">Current records</option><option value="archived">Archived records</option><option value="all">All records</option></select></label><label id="statusFilterLabel" hidden>Job status<select id="statusFilter"><option value="all">All statuses</option></select></label><label id="clientFilterLabel" hidden>Client<select id="clientFilter"><option value="all">All clients</option></select></label></div>
+        <section id="operationsToolbar" hidden></section>
         <section id="records" aria-live="polite"></section>
-        <p class="scope-note">This release saves Clients, contacts and Jobs to your company. Staff scheduling, files, RAMS and other modules are not connected here yet.</p>
+        <p class="scope-note">Company workspace · v13. Refresh to see colleagues’ latest changes. Planner times use UK site-local time. Timesheets, documents and inspections will follow in a later release.</p>
       </main>
     </div>
   </div>
@@ -31,6 +32,7 @@
   <dialog id="transferDialog" aria-labelledby="transferTitle"><div class="modalhead"><h2 id="transferTitle">Import / export</h2><button id="closeTransfer" class="close" aria-label="Close import and export">✕</button></div><p>Transfer Clients, their contacts and Jobs for <strong id="transferCompany"></strong>.</p><h3>Download saved records</h3><p>Includes archived records. Does not include users, files, staff, passwords or other modules.</p><button id="exportButton" class="secondary">Download Clients &amp; Jobs</button><hr><h3>Review an import</h3><p>Choose a Construct360 transfer file exported for this company. Import adds records only; existing client or job codes will stop the entire import. Nothing is overwritten.</p><input id="importFile" type="file" accept=".json,application/json" aria-label="Choose Construct360 transfer file"><div id="importPreview"></div><div id="importError" class="error-box" role="alert" hidden></div><label id="importCheckLabel" class="check-label" hidden><input type="checkbox" id="importCheck">I have checked the company, records and any prototype demonstration data.</label><button id="importButton" disabled>Import reviewed records</button></dialog>
   <div id="modal" class="modal" role="dialog" aria-modal="true" aria-label="Account and users"><div id="modalbox" class="modalbox"></div></div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="/api/config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script><script src="/auth.js"></script><script src="/workspace.js"></script>
+  <dialog id="operationsEditor" aria-labelledby="operationsTitle"><form id="operationsForm"><div class="modalhead"><div><p class="eyebrow" id="operationsEyebrow">YOUR COMPANY</p><h2 id="operationsTitle"></h2></div><button type="button" class="close" id="operationsClose" aria-label="Close details">✕</button></div><div id="operationsFields"></div><div id="operationsError" class="error-box" role="alert" hidden></div><div class="form-footer"><span id="operationsFootnote">Changes are saved for your company.</span><button type="button" class="secondary" id="operationsCancel">Close</button><button type="submit" id="operationsSave">Save</button></div></form></dialog>
+  <script src="/api/config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script><script src="/auth.js"></script><script src="/operations.js"></script><script src="/workspace.js"></script>
 </body>
 </html>

@@ -1,0 +1,9 @@
+# optional: keep environment-specific browser config out of git
+config.js
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+.vercel/
+supabase/.temp/

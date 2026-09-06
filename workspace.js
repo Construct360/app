@@ -10,13 +10,13 @@ let currentPage='overview',editState=null,pendingSave=null,archiveState=null,imp
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6500)}
 function closeModal(){modal.classList.remove('show');$('accountButton').focus()}
 function showLogin(){clearWorkspace();location.replace('/')}
-function clearWorkspace(){loadGeneration++;workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};$('workspaceApp').hidden=true;$('records').replaceChildren();['editor','transferDialog','confirmDialog'].forEach(id=>$(id).close());modal.classList.remove('show')}
+function clearWorkspace(){loadGeneration++;workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};$('workspaceApp').hidden=true;$('records').replaceChildren();['editor','transferDialog','confirmDialog','operationsEditor'].forEach(id=>$(id).close());modal.classList.remove('show');clearOperations()}
 function showError(element,error){element.textContent=friendlyError(error);element.hidden=false}
 function friendlyError(error){
-  if(error?.code==='23505')return 'This client or job code already exists. Nothing was changed. Refresh your records before trying again.';
+  if(error?.code==='23505')return 'This name or record code already exists. Nothing was changed. Use a different name or refresh before trying again.';
   if(error?.code==='23514')return 'Check required fields, text lengths, job status and date order. Nothing was changed.';
   if(error?.code==='23502')return 'Complete all required fields. Nothing was changed.';
-  if(error?.code==='PGRST202'||/workspace_.*schema cache/i.test(error?.message||''))return 'The Clients & Jobs database update is not installed yet. Run migration 005_clients_jobs.sql in Supabase, then refresh.';
+  if(error?.code==='PGRST202'||/(workspace_|operations_).*schema cache/i.test(error?.message||''))return 'The workspace update is not available yet. Please ask your Company Admin to check the v13 installation.';
   return error?.message||'The connection could not be completed. Your form is still here; try again.';
 }
 async function rpc(name,args){
@@ -31,13 +31,15 @@ async function loadWorkspace(){
     if(!authClient())throw new Error('Supabase connection is missing. Check the existing Vercel public configuration.');
     const access=await fetchCurrentAccess();
     if(generation!==loadGeneration)return;
-    if(!access.user||!access.membership?.is_active||access.organisation?.status!=='active'||!['admin','operations'].includes(access.membership.role)||!access.user.email_confirmed_at||access.user.user_metadata?.needs_password_setup){showLogin();return}
-    const snapshot=await rpc('workspace_snapshot');
+    if(!access.user||!access.membership?.is_active||access.organisation?.status!=='active'||!['admin','operations','supervisor','operative'].includes(access.membership.role)||!access.user.email_confirmed_at||access.user.user_metadata?.needs_password_setup){showLogin();return}
+    const snapshot=await rpc('operations_snapshot');
     if(generation!==loadGeneration)return;
     if(snapshot.organisation_id!==access.membership.organisation_id)throw new Error('Company check failed. No records were displayed.');
     c360Access=access;workspaceData=snapshot;
     $('companyName').textContent=access.organisation.name;$('companyRole').textContent=access.membership.role;
-    applyAccessToUi();$('legacyLink').hidden=access.organisation.workspace_mode!=='prototype';
+    applyAccessToUi();$('legacyLink').hidden=access.organisation.workspace_mode!=='prototype'||!isManager();
+    document.querySelectorAll('[data-manager]').forEach(el=>el.hidden=!isManager());
+    if(!isManager()&&!['overview','planner','jobs'].includes(currentPage))currentPage='planner';
     $('transferButton').hidden=access.membership.role!=='admin';
     $('accessState').hidden=true;$('workspaceApp').hidden=false;$('workspaceMessage').hidden=true;
     const selected=$('clientFilter').value;
@@ -59,6 +61,9 @@ function dateLabel(value){return value?new Intl.DateTimeFormat('en-GB',{day:'num
 function dateRange(job){return !job.start_date&&!job.end_date?'Dates not set':`${dateLabel(job.start_date)} → ${dateLabel(job.end_date)}`}
 function setPage(page){currentPage=page;$('recordSearch').value='';$('archiveFilter').value='active';$('statusFilter').value='all';$('clientFilter').value='all';render()}
 function render(){
+  $('operationsToolbar').hidden=true;
+  $('addButton').hidden=!isManager();
+  if(['staff','teams','planner','permissions'].includes(currentPage)||!isManager()){renderOperations();return}
   document.querySelectorAll('[data-page]').forEach(b=>{b.classList.toggle('active',b.dataset.page===currentPage);b.setAttribute('aria-current',b.dataset.page===currentPage?'page':'false')});
   $('pageTitle').textContent={overview:'Overview',clients:'Clients',jobs:'Jobs'}[currentPage];
   $('pageSubtitle').textContent={overview:'Your clients and jobs, in one place.',clients:'Company relationships, contact details and site contacts.',jobs:'Plan your work and keep every job connected to its client.'}[currentPage];
@@ -84,7 +89,7 @@ function render(){
   }
   $('records').innerHTML=`<div class="records-heading"><h2>${currentPage==='overview'?'Recently updated jobs':isClient?'Client directory':'Job register'}</h2><span>${records.length} ${records.length===1?'record':'records'}</span></div><div class="record-list">${records.map(r=>isClient?clientCard(r):jobCard(r)).join('')}</div>`;
 }
-function recordActions(kind,r){return `<div class="record-actions"><button class="secondary" data-action="edit" data-kind="${kind}" data-id="${esc(r.id)}">View / edit</button><button class="text-button" data-action="archive" data-kind="${kind}" data-id="${esc(r.id)}">${r.archived?'Restore':'Archive'}</button>${kind==='client'&&!r.archived?`<button class="text-button" data-action="new-job" data-id="${esc(r.id)}">+ Job</button>`:''}</div>`}
+function recordActions(kind,r){return `<div class="record-actions"><button class="secondary" data-action="edit" data-kind="${kind}" data-id="${esc(r.id)}">View / edit</button><button class="text-button" data-action="archive" data-kind="${kind}" data-id="${esc(r.id)}">${r.archived?'Restore':'Archive'}</button>${kind==='client'&&!r.archived?`<button class="text-button" data-action="new-job" data-id="${esc(r.id)}">+ Job</button>`:''}${kind==='job'&&!r.archived&&!CLOSED_STATUSES.has(r.status)?`<button class="text-button" data-ops="book-job" data-id="${esc(r.id)}">Schedule crew</button>`:''}</div>`}
 function clientCard(c){return `<article class="record"><div><div class="record-code">CLIENT ${esc(c.code)} ${c.archived?'· ARCHIVED':''}</div><span class="record-title">${esc(c.name)}</span><div class="record-sub">${esc(c.address||'Address not added')}</div></div><div class="record-side">${esc(c.contact||'Primary contact not added')}<br>${esc(c.email||c.phone||'Contact details not added')}<div class="record-sub">${contactsFor(c.id).length} site contacts · ${workspaceData.jobs.filter(j=>j.client_id===c.id&&!j.archived).length} current jobs</div></div>${recordActions('client',c)}</article>`}
 function jobCard(j){return `<article class="record"><div><div class="record-code">JOB ${esc(j.code)}</div><span class="record-title">${esc(j.site)}</span><div class="record-sub">${esc(clientFor(j.client_id)?.name||'Client unavailable')} · ${esc(j.scaffold_type||'Scaffold type not set')}</div></div><div class="record-side"><span class="badge ${j.archived?'archived':CLOSED_STATUSES.has(j.status)?'completed':''}">${esc(j.archived?'Archived':j.status)}</span><div class="date-range">${esc(dateRange(j))}</div><div class="record-sub">${esc(j.team||'Team not assigned')}</div></div>${recordActions('job',j)}</article>`}
 function field(label,name,value='',options={}){
@@ -92,6 +97,7 @@ function field(label,name,value='',options={}){
   return `<div class="field ${full?'full':''}"><label for="f_${name}">${esc(label)}${required?' *':''}</label>${textarea?`<textarea id="f_${name}" name="${name}" maxlength="${max}">${esc(value)}</textarea>`:`<input id="f_${name}" name="${name}" type="${type}" maxlength="${max}" value="${esc(value)}" ${required?'required':''}>`}</div>`;
 }
 function openEditor(kind,id=null,clientId=null){
+  if(!isManager())return;
   const record=id?(kind==='client'?workspaceData.clients:workspaceData.jobs).find(r=>r.id===id):null;
   if(id&&!record)return;
   if(kind==='job'&&!record&&!workspaceData.clients.some(c=>!c.archived)){toast('Add a client before creating a job.');openEditor('client');return}
@@ -105,7 +111,7 @@ function openEditor(kind,id=null,clientId=null){
   }else{
     const j=record||{},selected=j.client_id||clientId||workspaceData.clients.find(c=>!c.archived)?.id;
     const available=workspaceData.clients.filter(c=>!c.archived||c.id===j.client_id);
-    $('editorFields').innerHTML=`<div class="formgrid"><div class="field full"><label for="jobClient">Client *</label><select id="jobClient" name="client_id" required ${record?'disabled':''}>${available.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.code)} · ${esc(c.name)}${c.archived?' (archived)':''}</option>`).join('')}</select></div>${field('Site / job name','site',j.site,{required:true,full:true})}${field('Scaffold type','scaffold_type',j.scaffold_type,{full:true})}${field('Start date','start_date',j.start_date,{type:'date'})}${field('End date','end_date',j.end_date,{type:'date'})}<div class="field"><label for="jobStatus">Status *</label><select name="status" id="jobStatus">${JOB_STATUSES.map(s=>`<option ${s===(j.status||'Quotation')?'selected':''}>${esc(s)}</option>`).join('')}</select></div>${field('Team label (not scheduled)','team',j.team,{max:120})}${field('Job notes','notes',j.notes,{textarea:true,max:5000,full:true})}</div><h3 style="margin-top:24px">Site contacts for this job</h3><div id="jobContacts"></div><p class="hint">Team labels are notes only. Staff assignment, scheduling, photos, RAMS and drawings are not connected in this release.</p>`;
+    $('editorFields').innerHTML=`<div class="formgrid"><div class="field full"><label for="jobClient">Client *</label><select id="jobClient" name="client_id" required ${record?'disabled':''}>${available.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.code)} · ${esc(c.name)}${c.archived?' (archived)':''}</option>`).join('')}</select></div>${field('Site / job name','site',j.site,{required:true,full:true})}${field('Scaffold type','scaffold_type',j.scaffold_type,{full:true})}${field('Start date','start_date',j.start_date,{type:'date'})}${field('End date','end_date',j.end_date,{type:'date'})}<div class="field"><label for="jobStatus">Status *</label><select name="status" id="jobStatus">${JOB_STATUSES.map(s=>`<option ${s===(j.status||'Quotation')?'selected':''}>${esc(s)}</option>`).join('')}</select></div>${field('Team label (not scheduled)','team',j.team,{max:120})}${field('Job notes','notes',j.notes,{textarea:true,max:5000,full:true})}</div><h3 style="margin-top:24px">Site contacts for this job</h3><div id="jobContacts"></div><p class="hint">Use Schedule crew on the job card to create Planner bookings. This optional team label is a note and does not assign people. Photos, RAMS and drawings will follow in a later release.</p>`;
     renderJobContacts(selected,record?assignmentsFor(record.id):[]);$('jobClient').onchange=()=>renderJobContacts($('jobClient').value,[]);
     $('f_start_date').onchange=()=>{$('f_end_date').min=$('f_start_date').value};$('f_end_date').min=j.start_date||'';
   }
@@ -195,7 +201,7 @@ $('statusFilter').innerHTML+=[...JOB_STATUSES].map(s=>`<option>${esc(s)}</option
 document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
 $('records').onclick=e=>{const b=e.target.closest('button[data-action]');if(!b)return;const {action,kind,id}=b.dataset;if(action==='new')openEditor(kind);if(action==='edit')openEditor(kind,id);if(action==='new-job')openEditor('job',null,id);if(action==='archive')askArchive(kind,id)};
 ['recordSearch','archiveFilter','statusFilter','clientFilter'].forEach(id=>$(id).addEventListener(id==='recordSearch'?'input':'change',render));
-$('addButton').onclick=()=>openEditor(currentPage==='clients'?'client':'job');$('refreshButton').onclick=safeRefresh;
+$('addButton').onclick=()=>['staff','teams','planner'].includes(currentPage)?openOperations({staff:'staff',teams:'team',planner:'booking'}[currentPage]):openEditor(currentPage==='clients'?'client':'job');$('refreshButton').onclick=safeRefresh;
 $('recordForm').onsubmit=saveForm;['closeEditor','cancelEditor'].forEach(id=>$(id).onclick=()=>{if(!saving)$('editor').close()});
 ['editor','confirmDialog','transferDialog'].forEach(id=>$(id).addEventListener('cancel',event=>{if(saving)event.preventDefault()}));
 $('confirmAction').onclick=confirmArchive;$('cancelConfirm').onclick=()=>$('confirmDialog').close();
@@ -206,8 +212,9 @@ $('signOut').onclick=()=>logoutUser().catch(error=>toast(friendlyError(error)));
 // Reuse the existing account/user dialogs; make their overlay keyboard-contained.
 let modalFocus;
 new MutationObserver(()=>{if(modal.classList.contains('show')){modalFocus=document.activeElement;modalbox.querySelector('button,input,select')?.focus()}else if(modalFocus?.isConnected)modalFocus.focus()}).observe(modal,{attributes:true,attributeFilter:['class']});
-new MutationObserver(()=>{const hint=modalbox.querySelector('.card .muted');if(hint&&hint.textContent.includes('Staff page'))hint.textContent='Operatives and Supervisors receive a linked staff record automatically. The Staff workspace will be enabled in a later release.'}).observe(modalbox,{childList:true,subtree:true});
+new MutationObserver(()=>{const hint=modalbox.querySelector('.card .muted');const text='Operatives and Supervisors receive a linked Staff profile automatically. Refresh Staff after making user changes.';if(hint&&hint.textContent.includes('Staff page')&&hint.textContent!==text)hint.textContent=text}).observe(modalbox,{childList:true,subtree:true});
 modal.addEventListener('keydown',event=>{if(event.key==='Escape'){closeModal();return}if(event.key!=='Tab')return;const items=[...modal.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href]')].filter(x=>x.getClientRects().length);if(!items.length)return;const first=items[0],last=items.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}});
 modal.addEventListener('click',event=>{if(event.target===modal)closeModal()});
 if(authClient())authClient().auth.onAuthStateChange((event,session)=>{c360Session=session;if(event==='SIGNED_OUT'){showLogin()}if(event==='PASSWORD_RECOVERY')location.replace('/?auth=recovery');if(event==='SIGNED_IN'&&c360Access&&session?.user.id!==c360Access.user.id){clearWorkspace();setTimeout(safeRefresh,0)}});
+initialiseOperations();
 safeRefresh();

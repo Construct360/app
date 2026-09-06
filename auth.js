@@ -236,8 +236,8 @@ async function routeAuthenticatedUser(){
       document.getElementById("disabledPlatformLink").hidden=!c360Access.isPlatformAdmin;
       return;
     }
-    const legacyRequested=c360Access.organisation.workspace_mode==='prototype'&&new URL(location.href).searchParams.get('legacy')==='1';
-    if(['admin','operations'].includes(c360Access.membership.role)&&!legacyRequested){location.replace('/workspace');return}
+    const legacyRequested=['admin','operations'].includes(c360Access.membership.role)&&c360Access.organisation.workspace_mode==='prototype'&&new URL(location.href).searchParams.get('legacy')==='1';
+    if(['admin','operations','supervisor','operative'].includes(c360Access.membership.role)&&!legacyRequested){location.replace('/workspace');return}
     if(c360Access.organisation.workspace_mode!=="prototype"){
       showLogin();switchAuthView("workspace-setup");
       document.getElementById("setupCompanyName").textContent=c360Access.organisation.name;
@@ -355,7 +355,7 @@ async function inviteCompanyUser(){
 async function changeCompanyUserRole(user_id,role){try{await callAdminFunction({action:"update-role",user_id,role});await syncLinkedStaffFromSupabase();toast("Role updated");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));await refreshAdminUsers()}}
 async function setCompanyUserActive(user_id,is_active){try{await callAdminFunction({action:"set-active",user_id,is_active});await syncLinkedStaffFromSupabase();toast(is_active?"User reactivated":"User disabled");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));await refreshAdminUsers()}}
 async function permanentlyDeleteCompanyUser(user_id){
-  if(!confirm("Permanently delete this user?\n\nThis removes their login, company access and linked Staff record. This cannot be undone."))return;
+  if(!confirm("Permanently delete this user?\n\nThis permanently removes their login and company access. Their staff profile is archived and unlinked so booking history is retained; its email and phone are cleared. Review any future bookings for this person. Login deletion cannot be undone."))return;
   if(!confirm("Final confirmation: permanently delete this user?"))return;
   try{await callAdminFunction({action:"delete-user",user_id});await syncLinkedStaffFromSupabase();toast("User permanently deleted");await refreshAdminUsers()}catch(e){toast(normaliseAuthError(e));await refreshAdminUsers()}
 }

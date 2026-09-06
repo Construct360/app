@@ -1,7 +1,6 @@
 import { context, response, rpc, sendReservedInvite, HttpError } from "../_shared/platform.ts";
 
 const roles=new Set(["admin","operations","supervisor","operative"]);
-const staffRole=(role:string)=>role==="supervisor"?"Scaffold Supervisor":role==="operative"?"Operative":null;
 
 Deno.serve(async(req)=>{
   const json=(body:unknown,status=200)=>response(req,body,status);
@@ -40,15 +39,8 @@ Deno.serve(async(req)=>{
         if((count||0)<=1)return json({error:"A company must keep at least one active Admin"},400);
       }
       const {error}=await admin.from("organisation_memberships").update({role}).eq("organisation_id",caller.organisation_id).eq("user_id",target);if(error)throw error;
-      const linkedRole=staffRole(role);
-      if(linkedRole){
-        const {data:profile}=await admin.from("profiles").select("email,full_name").eq("id",target).maybeSingle();
-        const {error:staffError}=await admin.from("staff_members").upsert({organisation_id:caller.organisation_id,user_id:target,full_name:profile?.full_name||profile?.email||"Staff member",email:profile?.email||"",employment_role:linkedRole,is_active:m.is_active,created_by:user.id},{onConflict:"user_id"});
-        if(staffError)throw staffError;
-      }else{
-        const {error:staffError}=await admin.from("staff_members").delete().eq("organisation_id",caller.organisation_id).eq("user_id",target);
-        if(staffError)throw staffError;
-      }
+      // Migration 006 synchronizes linked staff in the membership transaction.
+      // Retain historical staff/booking links when someone moves to an office role.
       await admin.from("user_activity_log").insert({organisation_id:caller.organisation_id,actor_user_id:user.id,event_type:"user_role_changed",description:`Changed user role to ${role}`,metadata:{target_user_id:target}});
       return json({ok:true});
     }
@@ -61,7 +53,7 @@ Deno.serve(async(req)=>{
         if((count||0)<=1)return json({error:"A company must keep at least one active Admin"},400);
       }
       const {error}=await admin.from("organisation_memberships").update({is_active}).eq("organisation_id",caller.organisation_id).eq("user_id",target);if(error)throw error;
-      const {error:staffError}=await admin.from("staff_members").update({is_active,availability:is_active?"Available":"Unavailable"}).eq("organisation_id",caller.organisation_id).eq("user_id",target);if(staffError)throw staffError;
+      // The membership trigger synchronizes staff without resetting leave/availability.
       const {error:banError}=await admin.auth.admin.updateUserById(target,{ban_duration:is_active?"none":"876000h"});if(banError)throw banError;
       await admin.from("user_activity_log").insert({organisation_id:caller.organisation_id,actor_user_id:user.id,event_type:is_active?"user_reactivated":"user_disabled",description:is_active?"Reactivated company user":"Disabled company user",metadata:{target_user_id:target}});
       return json({ok:true});
