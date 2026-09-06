@@ -7,6 +7,7 @@ const ok=(actual,expected)=>{assert.deepEqual(actual,expected);checks++};
 async function rejects(fn,pattern){await assert.rejects(fn,pattern);checks++}
 const save=(user,kind,data,request=crypto.randomUUID())=>rpcAs(db,user,'workspace_save',[kind,JSON.stringify(data),request]);
 const snapshot=user=>rpcAs(db,user,'workspace_snapshot');
+const clientVersion=async id=>(await snapshot(ids.a)).clients.find(c=>c.id===id).version;
 const client=(name,extra={})=>({name,contacts:[],...extra});
 const job=(client_id,extra={})=>({client_id,site:'Brighton Marina',status:'Quotation',contact_ids:[],...extra});
 const read=(user,table)=>asUser(db,user,`select * from public.${table}`);
@@ -40,7 +41,7 @@ await rejects(()=>save(ids.a,'job',job(a2.id,{contact_ids:[contactId]})),/does n
 await rejects(()=>save(ids.b,'job',job(b.id,{contact_ids:[contactId]})),/does not belong/);
 await rejects(()=>save(ids.b,'client',client('Steal contact',{id:b.id,version:1,contacts:[{id:contactId,name:'Bad'}]})),/Contact unavailable/);
 ok((await snapshot(ids.b)).clients[0].version,1);
-await rejects(()=>save(ids.a,'client',client('Remove assigned',{id:a.id,version:1})),/assigned to a job/);
+await rejects(async()=>save(ids.a,'client',client('Remove assigned',{id:a.id,version:await clientVersion(a.id)})),/assigned to a job/);
 ok((await snapshot(ids.a)).clients[0].name,'Acme Scaffold');
 await rejects(()=>save(ids.a,'job',job(a.id,{start_date:'2026-09-20',end_date:'2026-09-01'})),/check constraint/);
 await rejects(()=>save(ids.a,'job',job(a.id,{status:'Bogus'})),/check constraint/);
@@ -51,14 +52,14 @@ ok((await snapshot(ids.a)).clients.length,2);
 const updated=await save(ids.ops,'job',job(a.id,{id:j.id,version:1,site:'Updated job',contact_ids:[contactId]}));ok(updated.version,2);
 await rejects(()=>save(ids.a,'job',job(a.id,{id:j.id,version:1,site:'Stale overwrite'})),/changed or is unavailable/);
 await rejects(()=>save(ids.a,'job',job(a2.id,{id:j.id,version:2})),/cannot be moved/);
-await rejects(()=>save(ids.a,'client',{...payload,id:a.id,version:1,archived:true}),/Archive this client/);
+await rejects(async()=>save(ids.a,'client',{...payload,id:a.id,version:await clientVersion(a.id),archived:true}),/Archive this client/);
 await save(ids.a,'job',job(a.id,{id:j.id,version:2,archived:true,contact_ids:[contactId]}));
-await save(ids.a,'client',{...payload,id:a.id,version:1,archived:true});
+await save(ids.a,'client',{...payload,id:a.id,version:await clientVersion(a.id),archived:true});
 await rejects(()=>save(ids.ops,'job',job(a.id)),/Restore the client/);
 await rejects(()=>save(ids.ops,'job',job(a.id,{id:j.id,version:3,archived:false})),/Restore the client/);
-await save(ids.ops,'client',{...payload,id:a.id,version:2,archived:false});
+await save(ids.ops,'client',{...payload,id:a.id,version:await clientVersion(a.id),archived:false});
 await save(ids.ops,'job',job(a.id,{id:j.id,version:3,archived:false}));
-await save(ids.ops,'client',{...payload,id:a.id,version:3,contacts:[]});
+await save(ids.ops,'client',{...payload,id:a.id,version:await clientVersion(a.id),contacts:[]});
 ok((await snapshot(ids.a)).contacts.length,0);
 // Disabled and suspended accounts cannot read or mutate, even with a saved request ID.
 await owner(`update public.organisation_memberships set is_active=false where user_id='${ids.ops}'`);
@@ -86,7 +87,7 @@ const importedClient=(await snapshot(ids.a)).clients.find(c=>c.code==='200');ok(
 // Constraints still protect tenant/contact relationships when bypassing RLS as the database owner.
 await rejects(()=>owner(`insert into public.jobs(organisation_id,client_id,code,number,site) values('${ids.orgA}','${b.id}','999001',1,'Bad link')`),/foreign key/);
 await owner('set role anon');for(const sql of ['select public.workspace_snapshot()',"select public.workspace_save('client','{}',gen_random_uuid())","select public.workspace_import('{}',gen_random_uuid())",'select * from public.clients'])await rejects(()=>db.query(sql),/permission denied/);
-await owner('reset role');await db.exec(await fs.readFile(appRoot+'/supabase/migrations/005_clients_jobs.sql','utf8'));ok((await snapshot(ids.a)).clients.length,5);
+await owner('reset role');await db.exec(await fs.readFile(appRoot+'/supabase/migrations/'+(process.env.C360_TEST_V14==='1'?'20260906180341_client_staff_documents_v14.sql':'005_clients_jobs.sql'),'utf8'));ok((await snapshot(ids.a)).clients.length,5);
 for(const file of ['auth.js','platform.js','workspace.js','legacy-transfer.js'])new vm.Script(await fs.readFile(appRoot+'/'+file,'utf8'),{filename:file});
 const html=await fs.readFile(appRoot+'/index.html','utf8');for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))if(m[1].trim())new vm.Script(m[1]);
 // Execute the actual legacy exporter with a download sink. It must not export local

@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 export const appRoot=path.resolve(import.meta.dirname,'..');
 export const ids={a:'00000000-0000-4000-8000-000000000001',b:'00000000-0000-4000-8000-000000000002',ops:'00000000-0000-4000-8000-000000000003',worker:'00000000-0000-4000-8000-000000000004',platform:'00000000-0000-4000-8000-000000000005',supervisor:'00000000-0000-4000-8000-000000000006',orgA:'10000000-0000-4000-8000-000000000001',orgB:'10000000-0000-4000-8000-000000000002'};
-export async function createDatabase(operations=process.env.C360_TEST_OPERATIONS==='1'){
+export async function createDatabase(operations=process.env.C360_TEST_OPERATIONS==='1'||process.env.C360_TEST_V14==='1'){
  const db=new PGlite();
  await db.exec(`create role anon nologin;create role authenticated nologin;create role service_role nologin bypassrls;
  create schema auth;create schema extensions;
@@ -13,6 +13,16 @@ export async function createDatabase(operations=process.env.C360_TEST_OPERATIONS
  grant usage on schema auth,public to authenticated,anon,service_role;grant execute on function auth.uid() to authenticated,anon,service_role;`);
  for(const filename of ['001_auth_foundation.sql','002_linked_staff_members.sql','003_platform_foundation.sql','005_clients_jobs.sql'])await db.exec((await fs.readFile(path.join(appRoot,'supabase/migrations',filename),'utf8')).replace('create extension if not exists pgcrypto with schema extensions;',''));
  if(operations)await db.exec(await fs.readFile(path.join(appRoot,'supabase/migrations/006_staff_teams_planner.sql'),'utf8'));
+ if(process.env.C360_TEST_V14==='1'){
+  if(!operations)throw new Error('v14 tests require operations schema');
+  await db.exec(`create schema storage;
+    create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+    create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text references storage.buckets(id),name text,unique(bucket_id,name));
+    alter table storage.objects enable row level security;
+    grant usage on schema storage to authenticated,anon;
+    grant select,insert,update,delete on storage.objects to authenticated,anon;`);
+  await db.exec(await fs.readFile(path.join(appRoot,'supabase/migrations/20260906180341_client_staff_documents_v14.sql'),'utf8'));
+ }
  await db.exec(`insert into public.organisations(id,name) values('${ids.orgA}','Test Company A'),('${ids.orgB}','Test Company B');`);
  for(const [name,role,org] of [['a','admin',ids.orgA],['b','admin',ids.orgB],['ops','operations',ids.orgA],['worker','operative',ids.orgA],['supervisor','supervisor',ids.orgA],['platform',null,null]]){
   await db.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())',[ids[name],name+'@example.test']);

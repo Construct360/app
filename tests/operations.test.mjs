@@ -113,7 +113,7 @@ await owner("update public.organisation_memberships set role='operations' where 
 ok((await snap()).staff.find(s=>s.id===sup.id).archived,true);
 await owner('set role anon');await rejects(()=>db.query('select public.operations_snapshot()'),/permission denied/);
 await rejects(()=>db.query("select public.operations_save('staff','{}',gen_random_uuid())"),/permission denied/);
-await owner('reset role');await db.exec(await fs.readFile(appRoot+'/supabase/migrations/006_staff_teams_planner.sql','utf8'));
+await owner('reset role');await db.exec(await fs.readFile(appRoot+'/supabase/migrations/'+(process.env.C360_TEST_V14==='1'?'20260906180341_client_staff_documents_v14.sql':'006_staff_teams_planner.sql'),'utf8'));
 ok((await snap()).staff.find(s=>s.id===worker.id).archived,true);
 ok((await snap()).bookings.length,3);
 console.log(`PASS ${checks} combined operations assertions: tenancy, role projections, private fields, staff lifecycle, frozen rosters, conflicts, retries, dates, stale edits, suspension, deletion and migration rerun.`);
