@@ -10,13 +10,13 @@ let currentPage='overview',editState=null,pendingSave=null,archiveState=null,imp
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6500)}
 function closeModal(){modal.classList.remove('show');$('accountButton').focus()}
 function showLogin(){clearWorkspace();location.replace('/')}
-function clearWorkspace(){loadGeneration++;workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};$('workspaceApp').hidden=true;$('records').replaceChildren();['editor','transferDialog','confirmDialog','operationsEditor'].forEach(id=>$(id).close());modal.classList.remove('show');clearOperations();clearStaffDocuments();stopWeather()}
+function clearWorkspace(){loadGeneration++;workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};$('workspaceApp').hidden=true;$('records').replaceChildren();['editor','transferDialog','confirmDialog','operationsEditor'].forEach(id=>$(id).close());modal.classList.remove('show');clearOperations();clearStaffDocuments();stopWeather();clearVehicles()}
 function showError(element,error){element.textContent=friendlyError(error);element.hidden=false}
 function friendlyError(error){
-  if(error?.code==='23505')return 'This name or record code already exists. Nothing was changed. Use a different name or refresh before trying again.';
-  if(error?.code==='23514')return 'Check required fields, text lengths, job status and date order. Nothing was changed.';
+  if(error?.code==='23505')return 'This name, record code or registration already exists. Nothing was changed. Use a different value or refresh before trying again.';
+  if(error?.code==='23514')return 'Check required fields, text lengths, numbers, status and dates. Nothing was changed.';
   if(error?.code==='23502')return 'Complete all required fields. Nothing was changed.';
-  if(error?.code==='PGRST202'||/(workspace_|operations_).*schema cache/i.test(error?.message||''))return 'The workspace update is not available yet. Please ask your Company Admin to check the v14 installation.';
+  if(error?.code==='PGRST202'||/(workspace_|operations_|vehicle).*schema cache/i.test(error?.message||''))return 'The workspace update is not available yet. Please ask your Company Admin to check the latest database migration.';
   return error?.message||'The connection could not be completed. Your form is still here; try again.';
 }
 async function rpc(name,args){
@@ -35,11 +35,11 @@ async function loadWorkspace(){
     const snapshot=await rpc('operations_snapshot');
     if(generation!==loadGeneration)return;
     if(snapshot.organisation_id!==access.membership.organisation_id)throw new Error('Company check failed. No records were displayed.');
-    c360Access=access;workspaceData=snapshot;
+    c360Access=access;workspaceData=snapshot;clearVehicles();
     $('companyName').textContent=access.organisation.name;$('companyRole').textContent=access.membership.role;
     applyAccessToUi();$('legacyLink').hidden=access.organisation.workspace_mode!=='prototype'||!isManager();
     document.querySelectorAll('[data-manager]').forEach(el=>el.hidden=!isManager());
-    if(!isManager()&&!['overview','planner','jobs'].includes(currentPage))currentPage='planner';
+    if(!isManager()&&!['overview','planner','jobs','vehicles'].includes(currentPage))currentPage='planner';
     $('transferButton').hidden=access.membership.role!=='admin';
     $('accessState').hidden=true;$('workspaceApp').hidden=false;$('workspaceMessage').hidden=true;
     const selected=$('clientFilter').value;
@@ -65,6 +65,8 @@ function render(){
   renderWeatherPanel();
   $('operationsToolbar').hidden=true;
   $('addButton').hidden=!isManager();
+  $('transferButton').hidden=c360Access?.membership?.role!=='admin'||currentPage==='vehicles';
+  if(currentPage==='vehicles'){renderVehicles();return}
   if(['staff','teams','planner','permissions'].includes(currentPage)||!isManager()){renderOperations();return}
   document.querySelectorAll('[data-page]').forEach(b=>{b.classList.toggle('active',b.dataset.page===currentPage);b.setAttribute('aria-current',b.dataset.page===currentPage?'page':'false')});
   $('pageTitle').textContent={overview:'Overview',clients:'Clients',jobs:'Jobs'}[currentPage];
@@ -210,7 +212,7 @@ $('statusFilter').innerHTML+=[...JOB_STATUSES].map(s=>`<option>${esc(s)}</option
 document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
 $('records').onclick=e=>{const b=e.target.closest('button[data-action]');if(!b)return;const {action,kind,id}=b.dataset;if(action==='new')openEditor(kind);if(action==='edit')openEditor(kind,id);if(action==='new-job')openEditor('job',null,id);if(action==='archive')askArchive(kind,id)};
 ['recordSearch','archiveFilter','statusFilter','clientFilter'].forEach(id=>$(id).addEventListener(id==='recordSearch'?'input':'change',render));
-$('addButton').onclick=()=>['staff','teams','planner'].includes(currentPage)?openOperations({staff:'staff',teams:'team',planner:'booking'}[currentPage]):openEditor(currentPage==='clients'?'client':'job');$('refreshButton').onclick=safeRefresh;
+$('addButton').onclick=()=>currentPage==='vehicles'?openVehicleEditor():['staff','teams','planner'].includes(currentPage)?openOperations({staff:'staff',teams:'team',planner:'booking'}[currentPage]):openEditor(currentPage==='clients'?'client':'job');$('refreshButton').onclick=safeRefresh;
 $('recordForm').onsubmit=saveForm;['closeEditor','cancelEditor'].forEach(id=>$(id).onclick=()=>{if(!saving)$('editor').close()});
 ['editor','confirmDialog','transferDialog'].forEach(id=>$(id).addEventListener('cancel',event=>{if(saving)event.preventDefault()}));
 $('confirmAction').onclick=confirmArchive;$('cancelConfirm').onclick=()=>$('confirmDialog').close();
@@ -226,4 +228,5 @@ modal.addEventListener('keydown',event=>{if(event.key==='Escape'){closeModal();r
 modal.addEventListener('click',event=>{if(event.target===modal)closeModal()});
 if(authClient())authClient().auth.onAuthStateChange((event,session)=>{c360Session=session;if(event==='SIGNED_OUT'){showLogin()}if(event==='PASSWORD_RECOVERY')location.replace('/?auth=recovery');if(event==='SIGNED_IN'&&c360Access&&session?.user.id!==c360Access.user.id){clearWorkspace();setTimeout(safeRefresh,0)}});
 initialiseOperations();
+initialiseVehicles();
 safeRefresh();
