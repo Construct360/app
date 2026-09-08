@@ -24,7 +24,10 @@ export async function createDatabase(operations=process.env.C360_TEST_OPERATIONS
   await db.exec(await fs.readFile(path.join(appRoot,'supabase/migrations/20260906180341_client_staff_documents_v14.sql'),'utf8'));
  }
  if((process.env.C360_TEST_V15==='1'||process.env.C360_TEST_V16==='1'))await db.exec(await fs.readFile(path.join(appRoot,'supabase/migrations/20260907195118_vehicle_inspections_v15.sql'),'utf8'));
- if(process.env.C360_TEST_V16==='1')await db.exec(await fs.readFile(path.join(appRoot,'supabase/migrations/20260908200027_timesheets_v16.sql'),'utf8'));
+ if(process.env.C360_TEST_V16==='1'){
+  await db.exec(await fs.readFile(path.join(appRoot,'supabase/migrations/20260908200027_timesheets_v16.sql'),'utf8'));
+  await db.exec(await fs.readFile(path.join(appRoot,'supabase/migrations/20260908210129_timesheets_simplified_v17.sql'),'utf8'));
+ }
  await db.exec(`insert into public.organisations(id,name) values('${ids.orgA}','Test Company A'),('${ids.orgB}','Test Company B');`);
  for(const [name,role,org] of [['a','admin',ids.orgA],['b','admin',ids.orgB],['ops','operations',ids.orgA],['worker','operative',ids.orgA],['supervisor','supervisor',ids.orgA],['platform',null,null]]){
   await db.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())',[ids[name],name+'@example.test']);

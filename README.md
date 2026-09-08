@@ -1,16 +1,15 @@
-# Construct360 · Timesheets · v16
+# Construct360 · Simpler timesheets · v17
 
-Start with **[START_HERE_v16.md](START_HERE_v16.md)** for installation and acceptance checks. Local results and limits are in **[VERIFICATION_v16.md](VERIFICATION_v16.md)**.
+Start with **[START_HERE_v17.md](START_HERE_v17.md)** for installation and acceptance checks. Local results and limitations are in **[VERIFICATION_v17.md](VERIFICATION_v17.md)**.
 
-This update adds daily saved drafts, explicit weekly timesheet submission, office approval/return, protected pay snapshots and Construct-360-branded PDF reports. It retains Vehicles, Staff, Clients, Planner, invitations and the compact weather widget.
+This update simplifies timesheets to one hours input per day, removes job selection, enforces whole/half-hour entries, renames pay figures Gross pay, and adds daily gross rates/pay to office PDFs. Save draft, Submit week, approvals, company separation and private pay remain unchanged.
 
 - Company workspace: `/workspace`
 - Platform Administration: `/platform`
-- Prerequisite: working v15 installation, including the vehicle inspections migration.
-- New migration: `supabase/migrations/20260908200027_timesheets_v16.sql`.
-- No new environment variables or dependencies. Keep the existing server-only `WEATHER_API_KEY`.
-- Existing Supabase Edge Functions, invitations, SMTP and domains remain unchanged.
+- Prerequisite: working v16 timesheets.
+- New migration: `supabase/migrations/20260908210129_timesheets_simplified_v17.sql`.
+- No new configuration, dependencies or Edge Function deployment.
 
-Apply only the new migration to an existing v15 installation, then deploy this frontend update. Do not rerun earlier migrations or the bootstrap script. Upload the extracted package contents to the existing GitHub repository root, not a containing folder or ZIP. Never upload live keys, `.env`, `.vercel`, `node_modules` or `supabase/.temp`.
+Apply the v17 SQL update first, then upload the extracted package contents to the existing GitHub repository root. If v16 SQL has not been installed, follow the prerequisite in START_HERE_v17.md; do not rerun migrations that have already succeeded. Never upload live keys, `.env`, `.vercel`, `node_modules` or `supabase/.temp`.
 
-This is a prepared release, not proof of deployment. Complete the v16 live acceptance checks in two test companies after deployment. Timesheets require connectivity. Pay figures are base-pay estimates, not payroll calculations or payslips.
+This is a prepared release, not proof of deployment. Gross pay is hours multiplied by the hourly rate, not a payslip or a full payroll calculation. Earlier release guides are included only for installation history; v17 supersedes their timesheet entry and report instructions.

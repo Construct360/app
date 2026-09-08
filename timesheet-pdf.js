@@ -8,29 +8,31 @@ async function buildTimesheetPdf(sheets,company,week,includePay=false,summary=fa
  function header(){pdf.setFillColor(...navy);pdf.rect(0,0,210,8,'F');pdf.addImage(logo,'PNG',16,16,76,16.7);pdf.setDrawColor(...orange);pdf.setLineWidth(0.8);pdf.line(16,40,194,40);y=51}
  function space(height){if(y+height>272){pdf.addPage();header()}}
  function text(value,size=10,color=navy){pdf.setFontSize(size);pdf.setTextColor(...color);for(const line of pdf.splitTextToSize(clean(value),178)){space(size*0.45+2);pdf.text(line,16,y);y+=size*0.45+2}}
+ function dailyPay(sheet,total){if(includePay&&total>0)text(`Gross rate: ${timesheetMoney(sheet.hourly_rate)} / hour | Daily gross pay: ${timesheetMoney(sheet.hourly_rate==null?null:Math.round(total*Math.round(Number(sheet.hourly_rate)*100))/100)}`,9,grey)}
  function rule(){space(6);pdf.setDrawColor(220,228,235);pdf.line(16,y,194,y);y+=5}
  header();text(summary?'WEEKLY TIMESHEET REPORT':'WEEKLY TIMESHEET',18);text(company,12);text(`Week: ${dateLabel(week)} to ${dateLabel(addDays(week,6))}`,10,grey);text('Generated: '+vehicleTime(new Date().toISOString())+' (UK time)',9,grey);y+=5;
- if(includePay)text('Base-pay estimates only: hours x hourly rate. No overtime uplift, deductions, tax or employer costs included. Approved rates are fixed at approval; other rates are provisional.',9,grey);
+ if(includePay)text('Gross pay: hours x hourly rate. No overtime uplift, deductions, tax or employer costs included. Approved rates are fixed at approval; other rates are provisional. Weekly gross pay is rounded once; rounded daily amounts may differ by a few pence.',9,grey);
  else text('Hours-only report. Saved records only; unsaved changes are not included.',9,grey);
  if(summary){
   const approved=sheets.filter(s=>s.status==='approved');
   text(`Timesheets: ${sheets.length} | Saved hours: ${timesheetHours(sheets.reduce((n,s)=>n+Number(s.total_hours),0))}`,11);
-  if(includePay)text(`Approved hours: ${timesheetHours(approved.reduce((n,s)=>n+Number(s.total_hours),0))} | Approved base-pay estimate: ${timesheetMoney(approved.reduce((n,s)=>n+Number(s.gross_estimate||0),0))}`,11);
+  if(includePay)text(`Approved hours: ${timesheetHours(approved.reduce((n,s)=>n+Number(s.total_hours),0))} | Approved gross pay: ${timesheetMoney(approved.reduce((n,s)=>n+Number(s.gross_estimate||0),0))}`,11);
   if(!sheets.length)text('No timesheets saved for this week.',11);
   for(const sheet of sheets){space(45);rule();text(sheet.staff_name,13);text(timesheetStatus(sheet.status),10);text(`${timesheetHours(sheet.total_hours)} hours`,11);
-   if(includePay)text(`Rate: ${timesheetMoney(sheet.hourly_rate)} / hour | Base-pay estimate: ${timesheetMoney(sheet.gross_estimate)}${sheet.status==='approved'?' (approved)':' (provisional)'}`,10);
+   if(includePay)text(`Rate: ${timesheetMoney(sheet.hourly_rate)} / hour | Gross pay: ${timesheetMoney(sheet.gross_estimate)}${sheet.status==='approved'?' (approved)':' (provisional)'}`,10);
    if(sheet.approved_at)text('Approved: '+vehicleTime(sheet.approved_at),9,grey);
+   for(let i=0;i<7;i++){const day=addDays(week,i),total=sheet.entries.filter(e=>e.date===day).reduce((n,e)=>n+Number(e.hours),0);if(total>0){space(20);text(`${dateLabel(day)} - ${timesheetHours(total)} hours`,10);dailyPay(sheet,total)}}
   }
  }else{
   for(const sheet of sheets){space(38);rule();text(sheet.staff_name,15);text('Status: '+timesheetStatus(sheet.status),11);text('Total worked: '+timesheetHours(sheet.total_hours)+' hours',12);
-   if(includePay)text(`Hourly rate: ${timesheetMoney(sheet.hourly_rate)} | Base-pay estimate: ${timesheetMoney(sheet.gross_estimate)}`,11);
+   if(includePay)text(`Hourly rate: ${timesheetMoney(sheet.hourly_rate)} | Gross pay: ${timesheetMoney(sheet.gross_estimate)}`,11);
    if(sheet.submitted_at)text('Submitted: '+vehicleTime(sheet.submitted_at),9,grey);
    if(sheet.approved_at)text('Approved: '+vehicleTime(sheet.approved_at),9,grey);
    if(sheet.review_note)text('Office note: '+sheet.review_note,10);
    for(let i=0;i<7;i++){const day=addDays(week,i),entries=sheet.entries.filter(e=>e.date===day),total=entries.reduce((n,e)=>n+Number(e.hours),0);
     if(!entries.length){space(15);rule();text(`${dateLabel(day)} - 0 hours (no hours recorded)`,10,grey);continue}
-    space(21);rule();text(`${dateLabel(day)} - ${timesheetHours(total)} hours`,12);
-    for(const entry of entries){text(`${timesheetHours(entry.hours)} hours | ${entry.job_label||'Daily total / not allocated'}`,10);if(entry.notes)text(entry.notes,9,grey)}
+    space(includePay?30:21);rule();text(`${dateLabel(day)} - ${timesheetHours(total)} hours`,12);dailyPay(sheet,total);
+    for(const entry of entries){text(`${timesheetHours(entry.hours)} hours${entry.job_label?' | '+entry.job_label:''}`,10);if(entry.notes)text(entry.notes,9,grey)}
    }
   }
  }

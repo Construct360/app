@@ -39,3 +39,20 @@ body:has(.modal.show),body:has(dialog[open]){overflow:hidden}
 #timesheetDialog{width:min(960px,96vw)}#timesheetDays{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:22px}.timesheet-day{border:1px solid #dbe3ec;border-radius:9px;margin:0;padding:14px;min-width:0}.timesheet-day legend{font-size:14px;font-weight:700;padding:0 6px}.timesheet-entry{display:grid;grid-template-columns:100px minmax(0,1fr);gap:10px;padding:10px 0}.timesheet-entry+.timesheet-entry{border-top:1px solid #e1e7ee}.timesheet-entry label{font-size:12px;font-weight:600;min-width:0}.timesheet-entry input,.timesheet-entry select,.timesheet-entry textarea{display:block;width:100%;min-width:0;margin-top:5px}.ts-entry-notes{grid-column:1/-1}.ts-remove{grid-column:1/-1;justify-self:start;padding:4px 0;font-size:12px}.ts-day-foot{display:flex;justify-content:space-between;align-items:center;font-size:12px}.timesheet-week-total{padding:20px 0;font-size:17px}.timesheet-footer{position:sticky;bottom:-28px;background:white;border-top:1px solid #dbe3ec;padding:15px 0;margin-top:20px;z-index:2;flex-wrap:wrap;gap:8px}.timesheet-footer>span{flex:1 1 200px;font-size:12px;color:#43586c}.timesheet-read-days{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.timesheet-read-days section{padding:16px;border:1px solid #dbe3ec;border-radius:9px;min-width:0}.timesheet-read-days h3{font-size:14px;margin:0 0 10px}.timesheet-read-days h3 span{float:right;color:#53697e;font-weight:500}.timesheet-read-days p{font-size:13px;overflow-wrap:anywhere}.timesheet-review{border-top:2px solid #e86719;padding-top:12px;margin-top:20px}.timesheet-review>label{display:block;font-size:13px}.timesheet-review textarea{width:100%;margin-top:8px}
 @media(max-width:700px){#timesheetDays,.timesheet-read-days{grid-template-columns:minmax(0,1fr)}.timesheet-card{grid-template-columns:minmax(0,1fr)}.timesheet-totals{align-items:start}.timesheet-footer{bottom:-20px}.timesheet-footer>span{flex-basis:100%}.timesheet-toolbar{gap:10px}.timesheet-toolbar .actions{width:100%}.timesheet-toolbar button{font-size:12px}.timesheet-entry{grid-template-columns:85px minmax(0,1fr)}}
 .timesheet-banner p{color:#d1e0ed}.timesheet-banner h2{color:#fff}
+/* v17: a quiet, single-column daily entry form. */
+#timesheetDialog{width:min(720px,96vw)}
+.ts-entry-help{color:#526477;font-size:13px;line-height:1.7;margin:0 0 16px}
+#timesheetDays{display:block;margin-top:18px;border-top:1px solid #dbe3ec}
+.timesheet-day{position:relative;border:0;border-bottom:1px solid #e4eaf0;border-radius:0;padding:14px 0 14px 180px}
+.timesheet-day legend{float:left;width:170px;margin-left:-180px;padding:13px 0;font-size:14px}
+.timesheet-entry{display:grid;grid-template-columns:100px minmax(0,1fr);align-items:start;gap:18px;padding:0}
+.timesheet-entry input{font-size:18px;text-align:center;padding:10px;margin-top:4px}
+.timesheet-entry input:focus{border-color:#ea762f;outline:2px solid #ffb475}
+.ts-entry-notes{grid-column:auto;min-width:0;padding-top:26px;color:#53697e;font-size:12px}
+.ts-entry-notes summary{cursor:pointer;min-height:24px}
+.ts-entry-notes label{display:block;margin-top:8px;font-weight:400}
+.ts-entry-notes textarea{min-height:72px}
+.timesheet-week-total{display:flex;justify-content:flex-end;align-items:baseline;gap:7px;padding:20px 0 12px;color:#526477;font-size:14px}
+.timesheet-week-total strong{font-size:26px;color:#08284c}
+.timesheet-card .eyebrow{display:none}
+@media(max-width:520px){.timesheet-day{padding-left:0}.timesheet-day legend{float:none;width:auto;margin:0;padding:10px 0 0}.timesheet-entry{grid-template-columns:85px minmax(0,1fr);padding-top:8px;gap:14px}.timesheet-footer button{padding:10px 12px;font-size:12px}}

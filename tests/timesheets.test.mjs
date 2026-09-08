@@ -38,12 +38,12 @@ try{
  await rejects(()=>save('supervisor','save',{...draft,id:w.id,version:w.version}),/changed or unavailable/);
  await rejects(()=>save('worker','save',{...draft,staff_id:supervisor.id}),/assigned by the server/);
  await rejects(()=>save('worker','save',{...draft,hourly_rate:999}),/assigned by the server/);
- const second={id:w.id,version:w.version,week_start:week,entries:[...draft.entries,{date:'2026-09-01',hours:7.25,notes:'Tuesday'}]};
+ const second={id:w.id,version:w.version,week_start:week,entries:[...draft.entries,{date:'2026-09-01',hours:7.5,notes:'Tuesday'}]};
  const saved=await save('worker','save',second);check(saved.status==='draft','Daily save remains draft');
  await rejects(()=>save('worker','save',second),/changed or unavailable/);
- w=(await snap('worker')).sheets[0];check(Number(w.total_hours)===15.25,'Weekly total');
+ w=(await snap('worker')).sheets[0];check(Number(w.total_hours)===15.5,'Weekly total');
  const current={...second,version:w.version};
- for(const entries of [[{date:week,hours:-1}],[{date:week,hours:25}],[{date:week,hours:'NaN'}],[{date:week,hours:8.001}],[{date:week,hours:14},{date:week,hours:14}],[{date:'2026-09-07',hours:8}],[{date:week,hours:8,notes:'x'.repeat(1001)}]])await rejects(()=>save('worker','save',{...current,entries}),/daily hours|at most/);
+ for(const entries of [[{date:week,hours:7.25}],[{date:week,hours:8.1}],[{date:week,hours:100}],[{date:week,hours:24.5}],[{date:week,hours:-1}],[{date:week,hours:25}],[{date:week,hours:'NaN'}],[{date:week,hours:8.001}],[{date:week,hours:14},{date:week,hours:14}],[{date:'2026-09-07',hours:8}],[{date:week,hours:8,notes:'x'.repeat(1001)}]])await rejects(()=>save('worker','save',{...current,entries}),/daily hours|at most/);
  await rejects(()=>save('worker','save',{...current,entries:[{date:week,hours:8,job_id:randomUUID()}]}),/available job/);
  await rejects(()=>save('worker','submit',{...current,confirmed:false}),/confirm/);
  await rejects(()=>save('worker','submit',{...current,entries:[],confirmed:true}),/some worked hours/);
