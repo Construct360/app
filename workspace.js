@@ -10,7 +10,7 @@ let currentPage='overview',editState=null,pendingSave=null,archiveState=null,imp
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6500)}
 function closeModal(){modal.classList.remove('show');$('accountButton').focus()}
 function showLogin(){clearWorkspace();location.replace('/')}
-function clearWorkspace(){loadGeneration++;workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};$('workspaceApp').hidden=true;$('records').replaceChildren();['editor','transferDialog','confirmDialog','operationsEditor'].forEach(id=>$(id).close());modal.classList.remove('show');clearOperations();clearStaffDocuments();stopWeather();clearVehicles()}
+function clearWorkspace(){loadGeneration++;workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};$('workspaceApp').hidden=true;$('records').replaceChildren();['editor','transferDialog','confirmDialog','operationsEditor'].forEach(id=>$(id).close());modal.classList.remove('show');clearOperations();clearStaffDocuments();stopWeather();clearVehicles();clearTimesheets()}
 function showError(element,error){element.textContent=friendlyError(error);element.hidden=false}
 function friendlyError(error){
   if(error?.code==='23505')return 'This name, record code or registration already exists. Nothing was changed. Use a different value or refresh before trying again.';
@@ -35,11 +35,11 @@ async function loadWorkspace(){
     const snapshot=await rpc('operations_snapshot');
     if(generation!==loadGeneration)return;
     if(snapshot.organisation_id!==access.membership.organisation_id)throw new Error('Company check failed. No records were displayed.');
-    c360Access=access;workspaceData=snapshot;clearVehicles();
+    c360Access=access;workspaceData=snapshot;clearVehicles();clearTimesheets();
     $('companyName').textContent=access.organisation.name;$('companyRole').textContent=access.membership.role;
     applyAccessToUi();$('legacyLink').hidden=access.organisation.workspace_mode!=='prototype'||!isManager();
     document.querySelectorAll('[data-manager]').forEach(el=>el.hidden=!isManager());
-    if(!isManager()&&!['overview','planner','jobs','vehicles'].includes(currentPage))currentPage='planner';
+    if(!isManager()&&!['overview','planner','jobs','vehicles','timesheets'].includes(currentPage))currentPage='planner';
     $('transferButton').hidden=access.membership.role!=='admin';
     $('accessState').hidden=true;$('workspaceApp').hidden=false;$('workspaceMessage').hidden=true;
     const selected=$('clientFilter').value;
@@ -65,7 +65,8 @@ function render(){
   renderWeatherPanel();
   $('operationsToolbar').hidden=true;
   $('addButton').hidden=!isManager();
-  $('transferButton').hidden=c360Access?.membership?.role!=='admin'||currentPage==='vehicles';
+  $('transferButton').hidden=c360Access?.membership?.role!=='admin'||['vehicles','timesheets'].includes(currentPage);
+  if(currentPage==='timesheets'){renderTimesheets();return}
   if(currentPage==='vehicles'){renderVehicles();return}
   if(['staff','teams','planner','permissions'].includes(currentPage)||!isManager()){renderOperations();return}
   document.querySelectorAll('[data-page]').forEach(b=>{b.classList.toggle('active',b.dataset.page===currentPage);b.setAttribute('aria-current',b.dataset.page===currentPage?'page':'false')});
@@ -229,4 +230,5 @@ modal.addEventListener('click',event=>{if(event.target===modal)closeModal()});
 if(authClient())authClient().auth.onAuthStateChange((event,session)=>{c360Session=session;if(event==='SIGNED_OUT'){showLogin()}if(event==='PASSWORD_RECOVERY')location.replace('/?auth=recovery');if(event==='SIGNED_IN'&&c360Access&&session?.user.id!==c360Access.user.id){clearWorkspace();setTimeout(safeRefresh,0)}});
 initialiseOperations();
 initialiseVehicles();
+initialiseTimesheets();
 safeRefresh();
