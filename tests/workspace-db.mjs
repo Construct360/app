@@ -28,6 +28,7 @@ export async function createDatabase(operations=process.env.C360_TEST_OPERATIONS
   await db.exec(await fs.readFile(path.join(appRoot,'supabase/migrations/20260908200027_timesheets_v16.sql'),'utf8'));
   await db.exec(await fs.readFile(path.join(appRoot,'supabase/migrations/20260908210129_timesheets_simplified_v17.sql'),'utf8'));
  }
+ if(process.env.C360_TEST_V18==='1')await db.exec(await fs.readFile(path.join(appRoot,'supabase/migrations/20260908214340_job_files_scaffold_inspections_v18.sql'),'utf8'));
  await db.exec(`insert into public.organisations(id,name) values('${ids.orgA}','Test Company A'),('${ids.orgB}','Test Company B');`);
  for(const [name,role,org] of [['a','admin',ids.orgA],['b','admin',ids.orgB],['ops','operations',ids.orgA],['worker','operative',ids.orgA],['supervisor','supervisor',ids.orgA],['platform',null,null]]){
   await db.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())',[ids[name],name+'@example.test']);
@@ -37,4 +38,4 @@ export async function createDatabase(operations=process.env.C360_TEST_OPERATIONS
  return db;
 }
 export async function asUser(db,id,query,params=[]){await db.exec('reset role;set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);return db.query(query,params)}
-export async function rpcAs(db,id,name,args=[]){const names={timesheets_snapshot:['date'],timesheet_history:['uuid'],timesheet_save:['text','jsonb','uuid'],workspace_snapshot:[],workspace_save:['text','jsonb','uuid'],workspace_import:['jsonb','uuid'],operations_snapshot:[],operations_save:['text','jsonb','uuid'],vehicles_snapshot:[],vehicle_history:['uuid','integer'],vehicle_save:['text','jsonb','uuid']};if(!(name in names))throw new Error('Unknown test RPC');return (await asUser(db,id,`select public.${name}(${names[name].map((t,i)=>'$'+(i+1)+'::'+t).join(',')}) as result`,args)).rows[0].result}
+export async function rpcAs(db,id,name,args=[]){const names={scaffold_review_alerts:[],job_resources_snapshot:['uuid'],job_file_save:['text','jsonb','uuid'],scaffold_snapshot:[],scaffold_history:['uuid'],scaffold_save:['text','jsonb','uuid'],timesheets_snapshot:['date'],timesheet_history:['uuid'],timesheet_save:['text','jsonb','uuid'],workspace_snapshot:[],workspace_save:['text','jsonb','uuid'],workspace_import:['jsonb','uuid'],operations_snapshot:[],operations_save:['text','jsonb','uuid'],vehicles_snapshot:[],vehicle_history:['uuid','integer'],vehicle_save:['text','jsonb','uuid']};if(!(name in names))throw new Error('Unknown test RPC');return (await asUser(db,id,`select public.${name}(${names[name].map((t,i)=>'$'+(i+1)+'::'+t).join(',')}) as result`,args)).rows[0].result}

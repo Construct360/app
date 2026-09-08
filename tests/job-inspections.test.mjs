@@ -1,0 +1,96 @@
+import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
+import {createDatabase,ids,rpcAs,asUser} from './workspace-db.mjs';
+process.env.C360_TEST_V16='1';process.env.C360_TEST_V18='1';
+const db=await createDatabase();let n=0;
+const check=(v,msg)=>{assert.ok(v,msg);n++};
+const reject=async(fn,re=/required|unavailable|denied|invalid|policy|failed/i)=>{await assert.rejects(fn,re);n++};
+const call=(who,name,args=[])=>rpcAs(db,ids[who],name,args);
+const change=(who,name,action,data,request=randomUUID())=>call(who,name,[action,JSON.stringify(data),request]);
+const resources=(who,id=null)=>call(who,'job_resources_snapshot',[id]);
+const snap=who=>call(who,'scaffold_snapshot');
+try{
+ async function makeJob(who,site){const c=await change(who,'workspace_save','client',{name:site+' client',contacts:[]});return change(who,'workspace_save','job',{client_id:c.id,site,status:'Quotation',contact_ids:[]})}
+ const job=await makeJob('a','Test scaffold site'),other=await makeJob('b','PRIVATE COMPANY B');
+ check((await resources('worker')).jobs.some(j=>j.id===job.id),'All-company shared job directory without assignment');
+ check(!(await resources('worker')).jobs.some(j=>j.id===other.id),'No other-company directory');
+ check(Object.keys((await resources('worker')).jobs[0]).sort().join(',')==='archived,code,id,site','Safe job projection only');
+ await reject(()=>resources('worker',other.id));
+ const payload={job_id:job.id,category:'images',name:'Progress.jpg',mime_type:'image/jpeg',byte_size:10};
+ const reserve=await change('worker','job_file_save','reserve',payload);
+ await reject(()=>change('worker','job_file_save','finish',{id:reserve.id}),/Upload the file/);
+ await asUser(db,ids.worker,"insert into storage.objects(bucket_id,name) values('job-files',$1)",[reserve.object_path]);
+ await change('worker','job_file_save','finish',{id:reserve.id});
+ for(const who of ['worker','supervisor','ops','a'])check((await resources(who,job.id)).files.length===1,'All roles shared image '+who);
+ check((await asUser(db,ids.supervisor,"select * from storage.objects where bucket_id='job-files'")).rows.length===1,'Shared authenticated download');
+ await reject(()=>asUser(db,ids.b,"select 1 / count(*) from storage.objects where name=$1",[reserve.object_path]),/division by zero/);
+ for(const category of ['private','rams','important'])await reject(()=>change('worker','job_file_save','reserve',{...payload,category}));
+ await reject(()=>change('worker','job_file_save','reserve',{...payload,job_id:other.id}));
+ await reject(()=>change('a','job_file_save','reserve',{...payload,byte_size:20971521}),/20 MB/);
+ await reject(()=>change('a','job_file_save','reserve',{...payload,mime_type:'text/html'}),/supported/);
+ await reject(()=>change('a','job_file_save','reserve',{...payload,object_path:'fake'}),/server/);
+ for(const category of ['rams','important','private']){
+  const file=await change('ops','job_file_save','reserve',{...payload,category,name:category+'.pdf',mime_type:'application/pdf'});
+  await reject(()=>asUser(db,ids.worker,"insert into storage.objects(bucket_id,name) values('job-files',$1)",[file.object_path]));
+  await asUser(db,ids.ops,"insert into storage.objects(bucket_id,name) values('job-files',$1)",[file.object_path]);
+  await change('ops','job_file_save','finish',{id:file.id});
+  if(category==='private'){
+   check(!(await resources('worker',job.id)).files.some(f=>f.id===file.id),'Private metadata hidden');
+   check((await asUser(db,ids.worker,"select * from storage.objects where name=$1",[file.object_path])).rows.length===0,'Private object hidden even by exact path');
+   check((await asUser(db,ids.worker,"select * from public.job_files where id=$1",[file.id])).rows.length===0,'Private table RLS');
+   await reject(()=>change('worker','job_file_save','finish',{id:file.id}));
+  }else check((await resources('worker',job.id)).files.some(f=>f.id===file.id),'Shared '+category);
+ }
+ await reject(()=>change('worker','job_file_save','archive',{id:reserve.id}));
+ await change('a','job_file_save','archive',{id:reserve.id});
+ check((await asUser(db,ids.worker,"select * from storage.objects where name=$1",[reserve.object_path])).rows.length===0,'Archived object unavailable');
+ await db.exec('reset role');check((await db.query("select * from storage.objects where name=$1",[reserve.object_path])).rows.length===1,'Archived object retained');
+ const scaffoldData={job_id:job.id,reference:'Front elevation',location:'North side',description:'Independent tied scaffold',erected_on:'2026-08-01'};
+ await reject(()=>change('worker','scaffold_save','scaffold',scaffoldData));
+ await reject(()=>change('a','scaffold_save','scaffold',{...scaffoldData,job_id:other.id}));
+ const created=await change('ops','scaffold_save','scaffold',scaffoldData);
+ let scaffold=(await snap('worker')).scaffolds[0];
+ check(scaffold.inspection_required&&!scaffold.latest_report&&!scaffold.next_due,'Initial inspection required, no invented dates');
+ check((await snap('worker')).can_inspect&&(await snap('supervisor')).can_inspect,'Everyone can inspect');
+ check((await snap('b')).scaffolds.length===0,'Scaffold tenancy');
+ const keys=['foundations','standards','bracing','ties','platforms','edge_protection','access','loading','design','surroundings'];
+ const data={id:created.id,version:scaffold.version,inspected_at:'2026-09-01T10:00:00Z',reason:'initial',outcome:'safe',checks:Object.fromEntries(keys.map(k=>[k,'pass'])),inspection_for:'Example contractor, Site address',inspector_position:'Scaffolder',findings:'None',action_taken:'None',further_action:'None',confirmed:true};
+ await reject(()=>change('worker','scaffold_save','inspect',{...data,confirmed:false}),/Confirm/);
+ await reject(()=>change('worker','scaffold_save','inspect',{...data,inspector_name:'Forged'}),/server/);
+ await reject(()=>change('worker','scaffold_save','inspect',{...data,checks:{}}),/checklist/);
+ await reject(()=>change('worker','scaffold_save','inspect',{...data,checks:{...data.checks,ties:'fail'}}),/failed check/);
+ await reject(()=>change('worker','scaffold_save','inspect',{...data,checks:Object.fromEntries(keys.map(k=>[k,'na']))}),/applicable/);
+ await reject(()=>change('worker','scaffold_save','inspect',{...data,inspected_at:'2199-01-01T00:00:00Z'}),/future/);
+ const req=randomUUID(),report=await change('worker','scaffold_save','inspect',data,req);
+ check((await change('worker','scaffold_save','inspect',data,req)).report_id===report.report_id,'Idempotent report retry');
+ scaffold=(await snap('supervisor')).scaffolds[0];
+ check(scaffold.latest_report.qualification_status==='not_verified','Qualifications explicitly unverified');
+ check(scaffold.latest_report.inspector_scope.includes('not verified'),'Qualification warning saved in immutable report');
+ check(new Date(scaffold.next_due)-new Date(data.inspected_at)===168*3600000,'Exactly 168 hours before next inspection, not report-entry time');
+ check(!scaffold.inspection_required,'Satisfactory recorded inspection clears initial requirement');
+ check((await call('a','scaffold_review_alerts')).unverified===1,'Office notification count');
+ await reject(()=>call('worker','scaffold_review_alerts'),/Office/);
+ await reject(()=>call('b','scaffold_history',[created.id]));
+ await reject(()=>change('supervisor','scaffold_save','inspect',data),/changed/);
+ await change('supervisor','scaffold_save','inspect',{...data,version:scaffold.version,inspected_at:'2026-09-02T10:00:00Z',outcome:'unsafe',checks:{...data.checks,ties:'fail'},findings:'Missing tie',action_taken:'Access prevented; site manager notified',further_action:'Repair and reinspect'});
+ scaffold=(await snap('a')).scaffolds[0];check(scaffold.inspection_required&&scaffold.latest_report.outcome==='unsafe','Unsafe persists until satisfactory reinspection');
+ await change('worker','scaffold_save','flag',{id:created.id,version:scaffold.version,reason:'High winds'});
+ scaffold=(await snap('ops')).scaffolds[0];
+ await reject(()=>change('worker','scaffold_save','inspect',{...data,version:scaffold.version,inspected_at:'2026-09-03T10:00:00Z'}),/latest reported event/);
+ const reports=(await call('worker','scaffold_history',[created.id])).reports;
+ check(reports.length===2,'Shared immutable report history');
+ for(const table of ['job_files','job_scaffolds','scaffold_inspection_reports','scaffold_events']){
+  await reject(()=>asUser(db,ids.a,'delete from public.'+table),/permission denied/);
+  await reject(()=>asUser(db,ids.worker,'update public.'+table+' set organisation_id=$1',[ids.orgB]),/permission denied/);
+ }
+ await change('ops','scaffold_save','dismantle',{id:created.id,version:scaffold.version,confirmed:true});
+ scaffold=(await snap('worker')).scaffolds[0];check(scaffold.dismantled,'Dismantling retained, never deleted');
+ await reject(()=>change('worker','scaffold_save','inspect',{...data,version:scaffold.version,inspected_at:new Date().toISOString()}),/dismantled/);
+ await db.exec('reset role');
+ const grants=await db.query("select proname,proconfig,has_function_privilege('anon',oid,'execute') access from pg_proc where pronamespace='public'::regnamespace and proname in ('job_file_save','job_resources_snapshot','scaffold_save','scaffold_history','scaffold_snapshot','scaffold_review_alerts')");
+ check(grants.rows.length===6&&grants.rows.every(r=>!r.access&&r.proconfig.some(v=>v.startsWith('search_path='))),'Locked RPC grants/search paths');
+ await db.query('update public.organisation_memberships set is_active=false where user_id=$1',[ids.worker]);
+ await reject(()=>resources('worker'));
+ check((await asUser(db,ids.worker,"select * from storage.objects where bucket_id='job-files'")).rows.length===0,'Disabled account cannot download');
+ await db.exec('reset role');await db.query("update public.organisations set status='suspended' where id=$1",[ids.orgA]);await reject(()=>snap('ops'));
+ console.log('PASS job files and inspections: '+n+' assertions (tenant/role/storage privacy, report workflow, timing, immutable history, qualification warnings).');
+}catch(e){console.error('FAIL after '+n+': '+e.message);process.exitCode=1}finally{await db.close()}

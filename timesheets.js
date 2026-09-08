@@ -85,6 +85,24 @@ async function downloadTimesheetPdf(id,button){
  catch(error){toast(friendlyError(error))}finally{button.disabled=false}
 }
 function initialiseTimesheets(){
+ // Reject unsupported typing/paste before changing the field. The input
+ // fallback covers mobile keyboards, drag/drop and non-cancellable events.
+ const allowed=value=>value===''||(/^[0-9]{1,2}(?:[.]5?)?$/.test(value)&&Number(value)<=24);
+ const hoursInput=target=>target instanceof HTMLInputElement&&target.matches('#timesheetDays .ts-hours');
+ document.addEventListener('focusin',event=>{if(hoursInput(event.target)){const el=event.target;el.dataset.lastHours=allowed(el.value)?el.value:''}},true);
+ document.addEventListener('beforeinput',event=>{
+  const el=event.target;if(!hoursInput(el)||event.data==null)return;
+  const next=el.value.slice(0,el.selectionStart)+event.data+el.value.slice(el.selectionEnd);
+  if(!allowed(next)){event.preventDefault();toast('Use whole or half hours, from 0 to 24.')}
+ },true);
+ document.addEventListener('input',event=>{
+  const el=event.target;if(!hoursInput(el))return;
+  if(!allowed(el.value)){el.value=el.dataset.lastHours||'';event.stopImmediatePropagation();toast('Use whole or half hours, from 0 to 24.')}
+  else el.dataset.lastHours=el.value;
+ },true);
+ document.addEventListener('focusout',event=>{
+  const el=event.target;if(hoursInput(el)&&el.value.endsWith('.')){el.value=el.value.slice(0,-1);el.dataset.lastHours=el.value;updateTimesheetTotals()}
+ },true);
  document.addEventListener('click',event=>{
   const b=event.target.closest('[data-timesheet]');if(b&&!timesheetBusy){const id=b.dataset.id;({previous:()=>changeTimesheetWeek(addDays(timesheetWeek,-7)),next:()=>changeTimesheetWeek(addDays(timesheetWeek,7)),retry:()=>{timesheetData=null;renderTimesheets()},new:()=>openTimesheet(),edit:()=>openTimesheet(id),view:()=>openTimesheet(id,'view'),review:()=>openTimesheet(id,'review'),approve:()=>saveTimesheet('approve'),return:()=>saveTimesheet('return'),pdf:()=>downloadTimesheetPdf(id,b),report:()=>downloadTimesheetPdf(null,b)})[b.dataset.timesheet]?.();return}
 
