@@ -3,14 +3,14 @@ const $=id=>document.getElementById(id);
 const modal=$('modal'),modalbox=$('modalbox');
 const escapeHtmlAttr=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const esc=escapeHtmlAttr;
-const JOB_STATUSES=['Quotation','Acceptance & Planning','Delivery & Erection','Handover & Initial Inspection','Dismantling & Removal','Completion/Closed','Cancelled','Completed'];
-const CLOSED_STATUSES=new Set(['Completion/Closed','Cancelled','Completed']);
+const JOB_STATUSES=['Quotation','Acceptance & Planning','Delivery & Erection','Handover','Dismantling & Removal','Completion/Closed','Cancelled'];
+const CLOSED_STATUSES=new Set(['Completion/Closed','Cancelled']);
 let workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};
 let currentPage='overview',editState=null,pendingSave=null,archiveState=null,importState=null,loading=false,saving=false,toastTimer,loadGeneration=0;
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6500)}
 function closeModal(){modal.classList.remove('show');$('accountButton').focus()}
 function showLogin(){clearWorkspace();location.replace('/')}
-function clearWorkspace(){loadGeneration++;workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};$('workspaceApp').hidden=true;$('records').replaceChildren();['editor','transferDialog','confirmDialog','operationsEditor'].forEach(id=>$(id).close());modal.classList.remove('show');clearOperations();clearStaffDocuments();stopWeather();clearVehicles();clearTimesheets();clearJobFiles();clearScaffolds()}
+function clearWorkspace(){clearRecordViews();$('leaveDialog').close();loadGeneration++;workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};$('workspaceApp').hidden=true;$('records').replaceChildren();['editor','transferDialog','confirmDialog','operationsEditor'].forEach(id=>$(id).close());modal.classList.remove('show');clearOperations();clearStaffDocuments();stopWeather();clearVehicles();clearTimesheets();clearJobFiles();clearScaffolds()}
 function showError(element,error){element.textContent=friendlyError(error);element.hidden=false}
 function friendlyError(error){
   if(error?.code==='23505')return 'This name, record code or registration already exists. Nothing was changed. Use a different value or refresh before trying again.';
@@ -35,7 +35,7 @@ async function loadWorkspace(){
     const snapshot=await rpc('operations_snapshot');
     if(generation!==loadGeneration)return;
     if(snapshot.organisation_id!==access.membership.organisation_id)throw new Error('Company check failed. No records were displayed.');
-    c360Access=access;workspaceData=snapshot;clearVehicles();clearTimesheets();clearJobFiles();clearScaffolds();
+    closeReadPage();c360Access=access;workspaceData=snapshot;clearVehicles();clearTimesheets();clearJobFiles();clearScaffolds();
     $('companyName').textContent=access.organisation.name;$('companyRole').textContent=access.membership.role;
     applyAccessToUi();$('legacyLink').hidden=access.organisation.workspace_mode!=='prototype'||!isManager();
     document.querySelectorAll('[data-manager]').forEach(el=>el.hidden=!isManager());
@@ -59,8 +59,10 @@ function contactsFor(id){return workspaceData.contacts.filter(c=>c.client_id===i
 function assignmentsFor(id){return workspaceData.assignments.filter(a=>a.job_id===id).map(a=>a.contact_id)}
 function dateLabel(value){return value?new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value+'T00:00:00Z')):'Not set'}
 function dateRange(job){return !job.start_date&&!job.end_date?'Dates not set':`${dateLabel(job.start_date)} → ${dateLabel(job.end_date)}`}
-function setPage(page){currentPage=page;$('recordSearch').value='';$('archiveFilter').value='active';$('statusFilter').value='all';$('clientFilter').value='all';render()}
+function setPage(page){clearRecordViews();history.pushState(null,'','#'+page);currentPage=page;$('recordSearch').value='';$('archiveFilter').value='active';$('statusFilter').value='all';$('clientFilter').value='all';render()}
 function render(){
+  if(readPanel)return;
+  if(recordView){renderRecordView();return}
   $('overviewSummary').hidden=currentPage!=='overview'||!isManager();
   renderWeatherPanel();
   $('operationsToolbar').hidden=true;
@@ -96,9 +98,9 @@ function render(){
   }
   $('records').innerHTML=`<div class="records-heading"><h2>${currentPage==='overview'?'Recently updated jobs':isClient?'Client directory':'Job register'}</h2><span>${records.length} ${records.length===1?'record':'records'}</span></div><div class="record-list">${records.map(r=>isClient?clientCard(r):jobCard(r)).join('')}</div>`;
 }
-function recordActions(kind,r){return `<div class="record-actions">${kind==='job'?`<button class="secondary" data-job-files="${esc(r.id)}">Files &amp; photos</button><button class="secondary" data-scaffold-job="${esc(r.id)}">Scaffolds &amp; inspections</button>`:''}<button class="secondary" data-action="edit" data-kind="${kind}" data-id="${esc(r.id)}">View / edit</button><button class="text-button" data-action="archive" data-kind="${kind}" data-id="${esc(r.id)}">${r.archived?'Restore':'Archive'}</button>${kind==='client'&&!r.archived?`<button class="text-button" data-action="new-job" data-id="${esc(r.id)}">+ Job</button>`:''}${kind==='job'&&!r.archived&&!CLOSED_STATUSES.has(r.status)?`<button class="text-button" data-ops="book-job" data-id="${esc(r.id)}">Schedule crew</button>`:''}</div>`}
-function clientCard(c){return `<article class="record"><div><div class="record-code">CLIENT ${esc(c.code)} ${c.archived?'· ARCHIVED':''}</div><span class="record-title">${esc(c.name)}</span><div class="record-sub">${esc(c.address||'Address not added')}</div></div><div class="record-side">${esc(c.contact||'Primary contact not added')}<br>${esc(c.email||c.phone||'Contact details not added')}<div class="record-sub">${contactsFor(c.id).length} additional contacts · ${workspaceData.jobs.filter(j=>j.client_id===c.id&&!j.archived).length} current jobs</div></div>${recordActions('client',c)}</article>`}
-function jobCard(j){return `<article class="record"><div><div class="record-code">JOB ${esc(j.code)}</div><span class="record-title">${esc(j.site)}</span><div class="record-sub">${esc(clientFor(j.client_id)?.name||'Client unavailable')} · ${esc(j.scaffold_type||'Scaffold type not set')}</div></div><div class="record-side"><span class="badge ${j.archived?'archived':CLOSED_STATUSES.has(j.status)?'completed':''}">${esc(j.archived?'Archived':j.status)}</span><div class="date-range">${esc(dateRange(j))}</div><div class="record-sub">${esc(j.team||'Team not assigned')}</div></div>${recordActions('job',j)}</article>`}
+function recordActions(kind,r){return `<div class="record-actions">${kind==='job'?`<button class="secondary" data-job-files="${esc(r.id)}">Files &amp; photos</button><button class="secondary" data-scaffold-job="${esc(r.id)}">Scaffolds &amp; inspections</button>`:''}<button class="secondary" data-action="edit" data-kind="${kind}" data-id="${esc(r.id)}">Edit</button><button class="text-button" data-action="archive" data-kind="${kind}" data-id="${esc(r.id)}">${r.archived?'Restore':'Archive'}</button>${kind==='client'&&!r.archived?`<button class="text-button" data-action="new-job" data-id="${esc(r.id)}">+ Job</button>`:''}${kind==='job'&&!r.archived&&!CLOSED_STATUSES.has(r.status)?`<button class="text-button" data-ops="book-job" data-id="${esc(r.id)}">Schedule crew</button>`:''}</div>`}
+function clientCard(c){return `<article class="record clickable-record" tabindex="0" data-record-kind="client" data-id="${esc(c.id)}" aria-label="View client ${esc(c.name)}"><div><div class="record-code">CLIENT ${esc(c.code)} ${c.archived?'· ARCHIVED':''}</div><span class="record-title">${esc(c.name)}</span><div class="record-sub">${esc(c.address||'Address not added')}</div></div><div class="record-side">${esc(c.contact||'Primary contact not added')}<br>${esc(c.email||c.phone||'Contact details not added')}<div class="record-sub">${contactsFor(c.id).length} additional contacts · ${workspaceData.jobs.filter(j=>j.client_id===c.id&&!j.archived).length} current jobs</div></div>${recordActions('client',c)}</article>`}
+function jobCard(j){return `<article class="record clickable-record" tabindex="0" data-record-kind="job" data-id="${esc(j.id)}" aria-label="View job ${esc(j.site)}"><div><div class="record-code">JOB ${esc(j.code)}</div><span class="record-title">${esc(j.site)}</span><div class="record-sub">${esc(clientFor(j.client_id)?.name||'Client unavailable')} · ${esc(j.scaffold_type||'Scaffold type not set')}</div></div><div class="record-side"><span class="badge ${j.archived?'archived':CLOSED_STATUSES.has(j.status)?'completed':''}">${esc(j.archived?'Archived':j.status)}</span><div class="date-range">${esc(dateRange(j))}</div></div>${recordActions('job',j)}</article>`}
 function field(label,name,value='',options={}){
   const {type='text',max=180,required=false,full=false,textarea=false}=options;
   return `<div class="field ${full?'full':''}"><label for="f_${name}">${esc(label)}${required?' *':''}</label>${textarea?`<textarea id="f_${name}" name="${name}" maxlength="${max}">${esc(value)}</textarea>`:`<input id="f_${name}" name="${name}" type="${type}" maxlength="${max}" value="${esc(value)}" ${required?'required':''}>`}</div>`;
@@ -119,7 +121,7 @@ function openEditor(kind,id=null,clientId=null){
   }else{
     const j=record||{},selected=j.client_id||clientId||workspaceData.clients.find(c=>!c.archived)?.id;
     const available=workspaceData.clients.filter(c=>!c.archived||c.id===j.client_id);
-    $('editorFields').innerHTML=`<div class="formgrid"><div class="field full"><label for="jobClient">Client *</label><select id="jobClient" name="client_id" required ${record?'disabled':''}>${available.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.code)} · ${esc(c.name)}${c.archived?' (archived)':''}</option>`).join('')}</select></div>${field('Site / job name','site',j.site,{required:true,full:true})}${field('Scaffold type','scaffold_type',j.scaffold_type,{full:true})}${field('Start date','start_date',j.start_date,{type:'date'})}${field('End date','end_date',j.end_date,{type:'date'})}<div class="field"><label for="jobStatus">Status *</label><select name="status" id="jobStatus">${JOB_STATUSES.map(s=>`<option ${s===(j.status||'Quotation')?'selected':''}>${esc(s)}</option>`).join('')}</select></div>${field('Team label (not scheduled)','team',j.team,{max:120})}${field('Job notes','notes',j.notes,{textarea:true,max:5000,full:true})}</div><h3 style="margin-top:24px">Additional contacts for this job</h3><div id="jobContacts"></div><p class="hint">Use Schedule crew on the job card to create Planner bookings. This optional team label is a note and does not assign people. Save the job first, then use Files & photos for Images, RAMS, Important documents and Office-only files.</p>`;
+    $('editorFields').innerHTML=`<div class="formgrid"><div class="field full"><label for="jobClient">Client *</label><select id="jobClient" name="client_id" required ${record?'disabled':''}>${available.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.code)} · ${esc(c.name)}${c.archived?' (archived)':''}</option>`).join('')}</select></div>${field('Site / job name','site',j.site,{required:true,full:true})}${field('Scaffold type','scaffold_type',j.scaffold_type,{full:true})}${field('Start date','start_date',j.start_date,{type:'date'})}${field('End date','end_date',j.end_date,{type:'date'})}<div class="field"><label for="jobStatus">Status *</label><select name="status" id="jobStatus">${JOB_STATUSES.map(s=>`<option ${s===(j.status||'Quotation')?'selected':''}>${esc(s)}</option>`).join('')}</select></div>${field('Job notes','notes',j.notes,{textarea:true,max:5000,full:true})}</div><h3 style="margin-top:24px">Additional contacts for this job</h3><div id="jobContacts"></div><p class="hint">Use Schedule crew on the job card to create Planner bookings. Moving a job to Handover requires an inspection for each active scaffold. Save the job first, then use Files & photos for Images, RAMS, Important documents and Office-only files.</p>`;
     renderJobContacts(selected,record?assignmentsFor(record.id):[]);$('jobClient').onchange=()=>renderJobContacts($('jobClient').value,[]);
     $('f_start_date').onchange=()=>{$('f_end_date').min=$('f_start_date').value};$('f_end_date').min=j.start_date||'';
   }
@@ -140,10 +142,10 @@ function renderJobContacts(clientId,selected){const contacts=contactsFor(clientI
 function formData(){
   const f=new FormData($('recordForm')),r=editState.record;
   const data={id:r?.id||null,version:r?.version||0,archived:r?.archived||false};
-  const fields=editState.kind==='client'?['name','contact','contact_role','phone','email','address','notes']:['site','scaffold_type','start_date','end_date','status','team','notes'];
+  const fields=editState.kind==='client'?['name','contact','contact_role','phone','email','address','notes']:['site','scaffold_type','start_date','end_date','status','notes'];
   fields.forEach(k=>data[k]=String(f.get(k)||'').trim());
   if(editState.kind==='client')data.contacts=[...$('contactFields').children].map(el=>{const id=el.dataset.contactId;return Object.fromEntries([['id',id],['job_ids',el.dataset.siteChanged?([String(f.get('contact_site_'+id)||'')].filter(Boolean)):contactJobIds(id)],...['name','role','phone','email','notes'].map(k=>[k,String(f.get('contact_'+k+'_'+id)||'').trim()])])});
-  else {data.client_id=r?.client_id||$('jobClient').value;data.contact_ids=f.getAll('contact_ids')}
+  else {data.team=r?.team||'';data.client_id=r?.client_id||$('jobClient').value;data.contact_ids=f.getAll('contact_ids')}
   return data;
 }
 async function saveForm(event){
@@ -154,7 +156,7 @@ async function saveForm(event){
   $('closeEditor').disabled=$('cancelEditor').disabled=true;
   try{
     const result=await rpc('workspace_save',{p_kind:editState.kind,p_data:data,p_request_id:pendingSave.id});
-    const newJob=editState.kind==='job'&&!editState.record;$('editor').close();toast(`Saved ${editState.kind} ${result.code}.`);pendingSave=null;await loadWorkspace();if(newJob)await openJobFiles(result.id);
+    const newJob=editState.kind==='job'&&!editState.record;$('editor').close();toast(`Saved ${editState.kind} ${result.code}.`);pendingSave=null;await loadWorkspace();if(newJob)openRecordView('job',result.id);
   }catch(error){showError($('formError'),error)}
   finally{saving=false;$('saveRecord').disabled=false;$('saveRecord').textContent='Save';$('closeEditor').disabled=$('cancelEditor').disabled=false}
 }
@@ -235,4 +237,5 @@ initialiseVehicles();
 initialiseTimesheets();
 initialiseJobFiles();
 initialiseScaffolds();
+initialiseRecordDetails();
 safeRefresh();

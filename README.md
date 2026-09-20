@@ -1,17 +1,11 @@
-# Construct360 · Job files and scaffold inspections · v18
+# Construct360 · Profiles, planner & Handover · v19
 
-Start with **[START_HERE_v18.md](START_HERE_v18.md)**. Local results and limitations are in **[VERIFICATION_v18.md](VERIFICATION_v18.md)**.
+Start with **[START_HERE_v19.md](START_HERE_v19.md)**. Test results: **[VERIFICATION_v19.md](VERIFICATION_v19.md)**.
 
-This release adds company-wide shared job Images, RAMS and Important documents, office-only documents, worker progress uploads, and a common scaffold inspection page grouped by job. Each scaffold has its own initial/event-triggered requirements, seven-day deadlines and immutable branded reports. Unsupported timesheet input is now blocked as it is entered.
+v19 adds full-page record viewing, private staff photographs and addresses, annual leave, clearer multi-task planning and automatic inspection requirements on Handover. Run only `supabase/migrations/20260919183227_profiles_planner_handover_v19.sql` after the v18 prerequisite, then upload this package’s contents. Keep the new `staff-profiles` bucket private. No new environment variables or Edge Function deployment. Nothing has been deployed live during preparation.
 
-Everyone can submit scaffold inspections. Qualification rules are not yet configured: all reports are explicitly marked unverified, with in-app office warnings. Physical tag pairing and purchase entitlements remain future work, reusing the same stable scaffold identities and histories.
+Do not rerun earlier migrations after v19; they can overwrite newer functions.
 
-- Prerequisite: v16 timesheets plus the v17 half-hour SQL update.
-- New migration: `supabase/migrations/20260908214340_job_files_scaffold_inspections_v18.sql`.
-- Run SQL first, then upload the extracted package contents to the existing GitHub repository root.
-- The migration creates a PRIVATE `job-files` bucket. Keep it private.
-- No new API keys, environment variables, dependencies or Edge Function deployment.
+Existing shared/private job files, progress images, inspection history, half-hour timesheets and branded reports remain included. Everyone can submit scaffold inspections; qualification checks and physical tag pairing remain future work. Competence warnings are unchanged.
 
-No live deployment was performed during preparation. Complete the live acceptance checks and obtain review from a competent scaffold inspection lead before operational use. The app is a recording aid, not verification of inspector competence or a compliance certificate.
-
-Earlier release guides remain for installation history; START_HERE_v18.md describes the current behaviour. Never upload live secrets, `.env`, `.vercel`, `node_modules` or `supabase/.temp`.
+Earlier release guides remain for installation history. Use START_HERE_v19.md for this update. Never upload secrets, `.env`, `.vercel`, `node_modules` or `supabase/.temp`.
