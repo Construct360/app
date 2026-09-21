@@ -21,7 +21,7 @@ function openRecordView(kind,id,historyEntry=true){
 function restoreRecordRoute(){
  const [kind,id]=location.hash.slice(1).split('/');
  if(id&&RECORD_PAGES[kind]){recordView={kind,id};currentPage=RECORD_PAGES[kind]}
- else if(['overview','jobs','clients','staff','teams','planner','vehicles','timesheets','inspections','permissions'].includes(kind)){recordView=null;currentPage=kind}
+ else if(['dashboard','overview','jobs','clients','staff','teams','planner','vehicles','timesheets','inspections','permissions'].includes(kind)){recordView=null;currentPage=kind==='overview'?'dashboard':kind}
 }
 // Existing read-only history/file widgets are mounted in the workspace, not overlays.
 function showReadPage(dialogId,title){
@@ -51,7 +51,8 @@ function renderRecordView(){
  }else if(kind==='team'){
   subtitle='Company team';body=detailSection('Team details',detailFacts([['Supervisor',staffBy(r.supervisor_id)?.full_name||'Unavailable'],['Record',r.archived?'Archived':'Current'],['Private notes',r.notes||'No notes']]))+detailSection('Team members',`<div class="record-list">${teamCrew(id).map(staffBy).filter(Boolean).map(staffCard).join('')}</div>`)+`<div class="actions">${!r.archived?operationButton('book-team','Schedule task',id):''}</div>`;
  }else if(kind==='job'){
-  subtitle='Job '+r.code;body=detailSection('Job details',detailFacts([['Site',r.site],...(r.status?[['Status',r.status],['Scaffold type',r.scaffold_type||'Not set'],['Dates',dateRange(r)]]:[]),...(isManager()?[['Client',clientFor(r.client_id)?.name||'Unavailable'],['Notes',r.notes||'No notes']]:[])]))+`<div class="actions"><button type="button" data-job-files="${esc(id)}">Files &amp; photos</button><button type="button" class="secondary" data-scaffold-job="${esc(id)}">Scaffolds &amp; inspections</button>${isManager()&&!r.archived?operationButton('book-job','New task',id):''}</div>`;
+  subtitle='Job '+r.code;body=detailSection('Job details',detailFacts([['Site',r.site],['Site address',r.site_address||'Not added'],['Job supervisor',r.supervisor_name||'Unassigned'],...(r.status?[['Status',r.status],['Scaffold type',r.scaffold_type||'Not set'],['Dates',dateRange(r)]]:[]),...(isManager()?[['Client',clientFor(r.client_id)?.name||'Unavailable'],['Notes',r.notes||'No notes']]:[])]))+`<div class="actions"><button type="button" data-job-files="${esc(id)}">Files &amp; photos</button><button type="button" class="secondary" data-scaffold-job="${esc(id)}">Scaffolds &amp; inspections</button>${isManager()&&!r.archived?operationButton('book-job','New task',id):''}</div>`;
+  if(isManager())body+=detailSection('Assigned individuals',(r.staff_ids||[]).map(staffBy).filter(Boolean).map(s=>`<p>${esc(s.full_name)}</p>`).join('')||'<p>No individuals assigned.</p>');
   if(isManager())body+=detailSection('Additional contacts',contactsFor(r.client_id).filter(c=>assignmentsFor(id).includes(c.id)).map(c=>`<p><strong>${esc(c.name)}</strong> · ${esc(c.role)}<br>${esc([c.phone,c.email].filter(Boolean).join(' · '))}</p>`).join('')||'<p>No contacts attached.</p>');
   body+=detailSection('Scheduled tasks',`<div class="detail-tasks">${(workspaceData.bookings||[]).filter(b=>b.job_id===id&&b.status==='scheduled').map(bookingCard).join('')||'<p>No tasks visible to you.</p>'}</div>`);
  }else{

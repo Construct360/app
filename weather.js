@@ -1,7 +1,7 @@
 let weatherTimer,weatherController,weatherContext='',weatherGeneration=0,weatherLoadedAt=0,weatherSelectedLocation='';
 function stopWeather(){clearInterval(weatherTimer);weatherTimer=null;weatherController?.abort();weatherGeneration++;weatherContext='';weatherLoadedAt=0;weatherSelectedLocation='';document.getElementById('weatherPanel')?.replaceChildren()}
 function renderWeatherPanel(){
-  const panel=$('weatherPanel'),visible=currentPage==='overview'&&isManager();panel.hidden=!visible;
+  const panel=$('weatherPanel'),visible=currentPage==='dashboard'&&isManager();panel.hidden=!visible;
   if(!visible){if(weatherContext)stopWeather();return}
   const context=c360Access.membership.organisation_id+':'+c360Access.user.id;if(weatherContext===context)return;
   stopWeather();weatherContext=context;let saved='';try{saved=localStorage.getItem('c360-weather:'+context)||''}catch{}

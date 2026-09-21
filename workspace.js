@@ -6,11 +6,11 @@ const esc=escapeHtmlAttr;
 const JOB_STATUSES=['Quotation','Acceptance & Planning','Delivery & Erection','Handover','Dismantling & Removal','Completion/Closed','Cancelled'];
 const CLOSED_STATUSES=new Set(['Completion/Closed','Cancelled']);
 let workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};
-let currentPage='overview',editState=null,pendingSave=null,archiveState=null,importState=null,loading=false,saving=false,toastTimer,loadGeneration=0;
+let currentPage='dashboard',editState=null,pendingSave=null,archiveState=null,importState=null,loading=false,saving=false,toastTimer,loadGeneration=0;
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6500)}
 function closeModal(){modal.classList.remove('show');$('accountButton').focus()}
 function showLogin(){clearWorkspace();location.replace('/')}
-function clearWorkspace(){clearRecordViews();$('leaveDialog').close();loadGeneration++;workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};$('workspaceApp').hidden=true;$('records').replaceChildren();['editor','transferDialog','confirmDialog','operationsEditor'].forEach(id=>$(id).close());modal.classList.remove('show');clearOperations();clearStaffDocuments();stopWeather();clearVehicles();clearTimesheets();clearJobFiles();clearScaffolds()}
+function clearWorkspace(){clearDashboard();clearRecordViews();$('leaveDialog').close();loadGeneration++;workspaceData={clients:[],contacts:[],jobs:[],assignments:[]};$('workspaceApp').hidden=true;$('records').replaceChildren();['editor','transferDialog','confirmDialog','operationsEditor'].forEach(id=>$(id).close());modal.classList.remove('show');clearOperations();clearStaffDocuments();stopWeather();clearVehicles();clearTimesheets();clearJobFiles();clearScaffolds()}
 function showError(element,error){element.textContent=friendlyError(error);element.hidden=false}
 function friendlyError(error){
   if(error?.code==='23505')return 'This name, record code or registration already exists. Nothing was changed. Use a different value or refresh before trying again.';
@@ -35,11 +35,11 @@ async function loadWorkspace(){
     const snapshot=await rpc('operations_snapshot');
     if(generation!==loadGeneration)return;
     if(snapshot.organisation_id!==access.membership.organisation_id)throw new Error('Company check failed. No records were displayed.');
-    closeReadPage();c360Access=access;workspaceData=snapshot;clearVehicles();clearTimesheets();clearJobFiles();clearScaffolds();
+    clearDashboard();closeReadPage();c360Access=access;workspaceData=snapshot;clearVehicles();clearTimesheets();clearJobFiles();clearScaffolds();
     $('companyName').textContent=access.organisation.name;$('companyRole').textContent=access.membership.role;
     applyAccessToUi();$('legacyLink').hidden=access.organisation.workspace_mode!=='prototype'||!isManager();
     document.querySelectorAll('[data-manager]').forEach(el=>el.hidden=!isManager());
-    if(!isManager()&&!['overview','planner','jobs','vehicles','timesheets','inspections'].includes(currentPage))currentPage='planner';
+    if(!isManager()&&!['dashboard','planner','jobs','vehicles','timesheets','inspections'].includes(currentPage))currentPage='planner';
     $('transferButton').hidden=access.membership.role!=='admin';
     $('accessState').hidden=true;$('workspaceApp').hidden=false;$('workspaceMessage').hidden=true;
     const selected=$('clientFilter').value;
@@ -59,36 +59,37 @@ function contactsFor(id){return workspaceData.contacts.filter(c=>c.client_id===i
 function assignmentsFor(id){return workspaceData.assignments.filter(a=>a.job_id===id).map(a=>a.contact_id)}
 function dateLabel(value){return value?new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value+'T00:00:00Z')):'Not set'}
 function dateRange(job){return !job.start_date&&!job.end_date?'Dates not set':`${dateLabel(job.start_date)} → ${dateLabel(job.end_date)}`}
-function setPage(page){clearRecordViews();history.pushState(null,'','#'+page);currentPage=page;$('recordSearch').value='';$('archiveFilter').value='active';$('statusFilter').value='all';$('clientFilter').value='all';render()}
+function setPage(page){if(page==='overview')page='dashboard';clearRecordViews();history.pushState(null,'','#'+page);currentPage=page;$('recordSearch').value='';$('archiveFilter').value='active';$('statusFilter').value='all';$('clientFilter').value='all';render()}
 function render(){
   if(readPanel)return;
   if(recordView){renderRecordView();return}
-  $('overviewSummary').hidden=currentPage!=='overview'||!isManager();
+  $('overviewSummary').hidden=currentPage!=='dashboard'||!isManager();
   renderWeatherPanel();
   $('operationsToolbar').hidden=true;
   $('addButton').hidden=!isManager();
   $('transferButton').hidden=c360Access?.membership?.role!=='admin'||['vehicles','timesheets','inspections'].includes(currentPage);
+  if(currentPage==='dashboard'){renderDashboard();return}
   if(currentPage==='inspections'){renderScaffolds();return}
   if(currentPage==='jobs'&&!isManager()){renderSharedJobs();return}
   if(currentPage==='timesheets'){renderTimesheets();return}
   if(currentPage==='vehicles'){renderVehicles();return}
   if(['staff','teams','planner','permissions'].includes(currentPage)||!isManager()){renderOperations();return}
   document.querySelectorAll('[data-page]').forEach(b=>{b.classList.toggle('active',b.dataset.page===currentPage);b.setAttribute('aria-current',b.dataset.page===currentPage?'page':'false')});
-  $('pageTitle').textContent={overview:'Overview',clients:'Clients',jobs:'Jobs'}[currentPage];
-  $('pageSubtitle').textContent={overview:'Your clients and jobs, in one place.',clients:'Company relationships, contact details and additional contacts.',jobs:'Plan your work and keep every job connected to its client.'}[currentPage];
+  $('pageTitle').textContent={dashboard:'Dashboard',clients:'Clients',jobs:'Jobs'}[currentPage];
+  $('pageSubtitle').textContent={dashboard:'Your clients and jobs, in one place.',clients:'Company relationships, contact details and additional contacts.',jobs:'Plan your work and keep every job connected to its client.'}[currentPage];
   $('addButton').textContent=currentPage==='clients'?'+ New client':'+ New job';
-  $('filters').hidden=currentPage==='overview';$('statusFilterLabel').hidden=currentPage!=='jobs';$('clientFilterLabel').hidden=currentPage!=='jobs';
-  $('stats').hidden=currentPage!=='overview';
+  $('filters').hidden=currentPage==='dashboard';$('statusFilterLabel').hidden=currentPage!=='jobs';$('clientFilterLabel').hidden=currentPage!=='jobs';
+  $('stats').hidden=currentPage!=='dashboard';
   const activeClients=workspaceData.clients.filter(c=>!c.archived),activeJobs=workspaceData.jobs.filter(j=>!j.archived&&!CLOSED_STATUSES.has(j.status));
   $('stats').innerHTML=`<div class="stat"><span>Open jobs</span><strong>${activeJobs.length}</strong><small>Quotation to dismantling</small></div>`;
   const isClient=currentPage==='clients',term=$('recordSearch').value.trim().toLowerCase(),archive=$('archiveFilter').value;
   let records=isClient?workspaceData.clients:workspaceData.jobs;
-  records=records.filter(r=>currentPage==='overview'?!r.archived:archive==='all'||r.archived===(archive==='archived'));
-  if(currentPage!=='overview')records=records.filter(r=>{
+  records=records.filter(r=>currentPage==='dashboard'?!r.archived:archive==='all'||r.archived===(archive==='archived'));
+  if(currentPage!=='dashboard')records=records.filter(r=>{
     const search=isClient?[r.code,r.name,r.contact,r.email,r.address,r.phone]:[r.code,r.site,clientFor(r.client_id)?.name,r.scaffold_type,r.team];
     return search.join(' ').toLowerCase().includes(term)&&(isClient||($('statusFilter').value==='all'||r.status===$('statusFilter').value))&&(isClient||$('clientFilter').value==='all'||r.client_id===$('clientFilter').value);
   });
-  if(currentPage==='overview')records=[...records].sort((a,b)=>b.updated_at.localeCompare(a.updated_at)).slice(0,6);
+  if(currentPage==='dashboard')records=[...records].sort((a,b)=>b.updated_at.localeCompare(a.updated_at)).slice(0,6);
   if(!records.length&&!term&&archive==='active'&&(isClient?workspaceData.clients:workspaceData.jobs).some(r=>r.archived)&&$('statusFilter').value==='all'&&$('clientFilter').value==='all'){
     $('records').innerHTML=`<div class="empty"><h2>No current ${isClient?'clients':'jobs'}</h2><p>Your archived records are still saved. Open ${isClient?'Clients':'Jobs'} and choose Archived records in the View filter to restore them.</p></div>`;return;
   }
@@ -96,7 +97,7 @@ function render(){
     const isFiltered=term||archive!=='active'||$('statusFilter').value!=='all'||$('clientFilter').value!=='all';
     $('records').innerHTML=`<div class="empty"><p class="eyebrow">${isFiltered?'NO MATCHES':'READY WHEN YOU ARE'}</p><h2>${isFiltered?'No records match this view':isClient?'Add your first client':activeClients.length?'Create your first job':'Start with your first client'}</h2><p>${isFiltered?'Try another search or switch the filters.':activeClients.length&&!isClient?'Choose a client, add a site and set the job dates. Your team will see the same saved record.':'Your workspace starts empty. Add a client and their contacts, then create a job. No prototype demonstration records are added automatically.'}</p>${isFiltered?'':`<button data-action="new" data-kind="${isClient||!activeClients.length?'client':'job'}">${isClient||!activeClients.length?'+ New client':'+ New job'}</button>`}</div>`;return;
   }
-  $('records').innerHTML=`<div class="records-heading"><h2>${currentPage==='overview'?'Recently updated jobs':isClient?'Client directory':'Job register'}</h2><span>${records.length} ${records.length===1?'record':'records'}</span></div><div class="record-list">${records.map(r=>isClient?clientCard(r):jobCard(r)).join('')}</div>`;
+  $('records').innerHTML=`<div class="records-heading"><h2>${currentPage==='dashboard'?'Recently updated jobs':isClient?'Client directory':'Job register'}</h2><span>${records.length} ${records.length===1?'record':'records'}</span></div><div class="record-list">${records.map(r=>isClient?clientCard(r):jobCard(r)).join('')}</div>`;
 }
 function recordActions(kind,r){return `<div class="record-actions">${kind==='job'?`<button class="secondary" data-job-files="${esc(r.id)}">Files &amp; photos</button><button class="secondary" data-scaffold-job="${esc(r.id)}">Scaffolds &amp; inspections</button>`:''}<button class="secondary" data-action="edit" data-kind="${kind}" data-id="${esc(r.id)}">Edit</button><button class="text-button" data-action="archive" data-kind="${kind}" data-id="${esc(r.id)}">${r.archived?'Restore':'Archive'}</button>${kind==='client'&&!r.archived?`<button class="text-button" data-action="new-job" data-id="${esc(r.id)}">+ Job</button>`:''}${kind==='job'&&!r.archived&&!CLOSED_STATUSES.has(r.status)?`<button class="text-button" data-ops="book-job" data-id="${esc(r.id)}">Schedule crew</button>`:''}</div>`}
 function clientCard(c){return `<article class="record clickable-record" tabindex="0" data-record-kind="client" data-id="${esc(c.id)}" aria-label="View client ${esc(c.name)}"><div><div class="record-code">CLIENT ${esc(c.code)} ${c.archived?'· ARCHIVED':''}</div><span class="record-title">${esc(c.name)}</span><div class="record-sub">${esc(c.address||'Address not added')}</div></div><div class="record-side">${esc(c.contact||'Primary contact not added')}<br>${esc(c.email||c.phone||'Contact details not added')}<div class="record-sub">${contactsFor(c.id).length} additional contacts · ${workspaceData.jobs.filter(j=>j.client_id===c.id&&!j.archived).length} current jobs</div></div>${recordActions('client',c)}</article>`}
@@ -121,7 +122,7 @@ function openEditor(kind,id=null,clientId=null){
   }else{
     const j=record||{},selected=j.client_id||clientId||workspaceData.clients.find(c=>!c.archived)?.id;
     const available=workspaceData.clients.filter(c=>!c.archived||c.id===j.client_id);
-    $('editorFields').innerHTML=`<div class="formgrid"><div class="field full"><label for="jobClient">Client *</label><select id="jobClient" name="client_id" required ${record?'disabled':''}>${available.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.code)} · ${esc(c.name)}${c.archived?' (archived)':''}</option>`).join('')}</select></div>${field('Site / job name','site',j.site,{required:true,full:true})}${field('Scaffold type','scaffold_type',j.scaffold_type,{full:true})}${field('Start date','start_date',j.start_date,{type:'date'})}${field('End date','end_date',j.end_date,{type:'date'})}<div class="field"><label for="jobStatus">Status *</label><select name="status" id="jobStatus">${JOB_STATUSES.map(s=>`<option ${s===(j.status||'Quotation')?'selected':''}>${esc(s)}</option>`).join('')}</select></div>${field('Job notes','notes',j.notes,{textarea:true,max:5000,full:true})}</div><h3 style="margin-top:24px">Additional contacts for this job</h3><div id="jobContacts"></div><p class="hint">Use Schedule crew on the job card to create Planner bookings. Moving a job to Handover requires an inspection for each active scaffold. Save the job first, then use Files & photos for Images, RAMS, Important documents and Office-only files.</p>`;
+    $('editorFields').innerHTML=`<div class="formgrid"><div class="field full"><label for="jobClient">Client *</label><select id="jobClient" name="client_id" required ${record?'disabled':''}>${available.map(c=>`<option value="${esc(c.id)}" ${c.id===selected?'selected':''}>${esc(c.code)} · ${esc(c.name)}${c.archived?' (archived)':''}</option>`).join('')}</select></div>${field('Site / job name','site',j.site,{required:true,full:true})}${field('Site address','site_address',j.site_address,{textarea:true,max:1500,full:true})}${jobAssignmentFields(j)}${field('Scaffold type','scaffold_type',j.scaffold_type,{full:true})}${field('Start date','start_date',j.start_date,{type:'date'})}${field('End date','end_date',j.end_date,{type:'date'})}<div class="field"><label for="jobStatus">Status *</label><select name="status" id="jobStatus">${JOB_STATUSES.map(s=>`<option ${s===(j.status||'Quotation')?'selected':''}>${esc(s)}</option>`).join('')}</select></div>${field('Office-only job notes','notes',j.notes,{textarea:true,max:5000,full:true})}</div><h3 style="margin-top:24px">Additional contacts for this job</h3><div id="jobContacts"></div><p class="hint">Use Schedule crew on the job card to create Planner bookings. Moving a job to Handover requires an inspection for each active scaffold. Save the job first, then use Files & photos for Images, RAMS, Important documents and Office-only files.</p>`;
     renderJobContacts(selected,record?assignmentsFor(record.id):[]);$('jobClient').onchange=()=>renderJobContacts($('jobClient').value,[]);
     $('f_start_date').onchange=()=>{$('f_end_date').min=$('f_start_date').value};$('f_end_date').min=j.start_date||'';
   }
@@ -142,10 +143,10 @@ function renderJobContacts(clientId,selected){const contacts=contactsFor(clientI
 function formData(){
   const f=new FormData($('recordForm')),r=editState.record;
   const data={id:r?.id||null,version:r?.version||0,archived:r?.archived||false};
-  const fields=editState.kind==='client'?['name','contact','contact_role','phone','email','address','notes']:['site','scaffold_type','start_date','end_date','status','notes'];
+  const fields=editState.kind==='client'?['name','contact','contact_role','phone','email','address','notes']:['site','site_address','scaffold_type','start_date','end_date','status','notes'];
   fields.forEach(k=>data[k]=String(f.get(k)||'').trim());
   if(editState.kind==='client')data.contacts=[...$('contactFields').children].map(el=>{const id=el.dataset.contactId;return Object.fromEntries([['id',id],['job_ids',el.dataset.siteChanged?([String(f.get('contact_site_'+id)||'')].filter(Boolean)):contactJobIds(id)],...['name','role','phone','email','notes'].map(k=>[k,String(f.get('contact_'+k+'_'+id)||'').trim()])])});
-  else {data.team=r?.team||'';data.client_id=r?.client_id||$('jobClient').value;data.contact_ids=f.getAll('contact_ids')}
+  else {data.supervisor_staff_id=f.get('supervisor_staff_id')||null;data.staff_ids=f.getAll('staff_ids');data.team=r?.team||'';data.client_id=r?.client_id||$('jobClient').value;data.contact_ids=f.getAll('contact_ids')}
   return data;
 }
 async function saveForm(event){
@@ -182,7 +183,7 @@ async function confirmArchive(){
 function transferBundle(){
   return {format:'construct360-transfer-v1',source:'company-workspace',organisation_id:workspaceData.organisation_id,company_name:c360Access.organisation.name,exported_at:new Date().toISOString(),
     clients:workspaceData.clients.map(c=>({...Object.fromEntries(['code','name','contact','contact_role','phone','email','address','notes','archived'].map(k=>[k,c[k]])),contacts:contactsFor(c.id).map(t=>({...Object.fromEntries(['name','role','phone','email','notes'].map(k=>[k,t[k]])),key:t.id}))})),
-    jobs:workspaceData.jobs.map(j=>({...Object.fromEntries(['code','site','scaffold_type','start_date','end_date','status','team','notes','archived'].map(k=>[k,j[k]])),client_code:clientFor(j.client_id).code,contact_keys:assignmentsFor(j.id)}))};
+    jobs:workspaceData.jobs.map(j=>({...Object.fromEntries(['code','site','site_address','scaffold_type','start_date','end_date','status','team','notes','archived'].map(k=>[k,j[k]])),client_code:clientFor(j.client_id).code,contact_keys:assignmentsFor(j.id)}))};
 }
 function downloadJson(data,filename){const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 async function exportRecords(){
@@ -238,4 +239,5 @@ initialiseTimesheets();
 initialiseJobFiles();
 initialiseScaffolds();
 initialiseRecordDetails();
+initialiseDashboard();
 safeRefresh();

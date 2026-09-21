@@ -8,12 +8,12 @@ async function loadJobResources(){
  if(data.organisation_id!==org)throw new Error('Company check failed.');jobResourceData=data;return data;
 }
 async function renderSharedJobs(){
- $('pageTitle').textContent='Jobs';$('pageSubtitle').textContent='Shared job files and progress photos for your company. Your scheduled work remains in Planner.';
+ $('pageTitle').textContent='Jobs';$('pageSubtitle').textContent='Live jobs appear first. Site details and RAMS are shared with everyone in your company.';
  $('addButton').hidden=true;$('filters').hidden=true;
  document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='jobs'));
  if(!jobResourceData){$('records').innerHTML='<div class="empty">Loading company jobs…</div>';try{if(await loadJobResources())if(currentPage==='jobs')renderSharedJobs()}catch(e){$('records').innerHTML='<div class="empty">'+esc(friendlyError(e))+'</div>'}return}
- const jobs=jobResourceData.jobs.filter(j=>!j.archived);
- $('records').innerHTML=jobs.length?'<div class="record-list">'+jobs.map(j=>`<article class="record clickable-record" tabindex="0" data-record-kind="job" data-id="${esc(j.id)}"><div><p class="eyebrow">${esc(j.code)}</p><h3>${esc(j.site)}</h3></div><div class="record-actions">${workspaceData.jobs.some(assigned=>assigned.id===j.id)?operationButton('job-assignments','View assignments',j.id):''}<button class="secondary" data-job-files="${esc(j.id)}">Files &amp; photos</button><button class="secondary" data-scaffold-job="${esc(j.id)}">Scaffolds &amp; inspections</button></div></article>`).join('')+'</div>':'<div class="empty">No current jobs. Your office can create one.</div>';
+ const jobs=[...jobResourceData.jobs].filter(j=>!j.archived).sort((a,b)=>Number(b.is_live)-Number(a.is_live)||a.code.localeCompare(b.code));
+ $('records').innerHTML=jobs.length?'<div class="record-list">'+jobs.map(j=>`<article class="record clickable-record" tabindex="0" data-record-kind="job" data-id="${esc(j.id)}"><div><p class="eyebrow">${esc(j.code)}</p><h3>${esc(j.site)}</h3><p>${esc(j.site_address||'Site address not added')}</p><span class="badge">${esc(j.is_live?'Live job · '+j.status:j.status)}</span>${j.assigned_to_me?'<span class="badge">Assigned to you</span>':''}</div><div class="record-actions">${workspaceData.jobs.some(assigned=>assigned.id===j.id)?operationButton('job-assignments','View assignments',j.id):''}<button class="secondary" data-job-files="${esc(j.id)}">Files &amp; photos</button><button class="secondary" data-scaffold-job="${esc(j.id)}">Scaffolds &amp; inspections</button></div></article>`).join('')+'</div>':'<div class="empty">No current jobs. Your office can create one.</div>';
 }
 async function openJobFiles(id){
  if(jobFileBusy)return;const generation=++jobFileGeneration,org=c360Access.membership.organisation_id;

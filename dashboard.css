@@ -1,0 +1,14 @@
+.dashboard-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(290px,1fr);gap:22px;align-items:start;margin-top:22px}
+.dashboard-panel{background:#fff;border:1px solid #dce3eb;border-radius:16px;padding:24px;min-width:0}
+.dashboard-section-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.dashboard-section-heading h2{margin:0;font-size:20px;color:#102d4e}
+.dashboard-side{display:grid;gap:22px;min-width:0}
+.unread-count{display:inline-block;font-size:12px;vertical-align:middle;background:#eef3f8;color:#24496c;padding:5px 8px;border-radius:20px;margin-left:5px}
+.notification{display:grid;grid-template-columns:8px minmax(0,1fr);gap:12px;padding:19px 0;border-bottom:1px solid #e8edf2;overflow-wrap:anywhere}
+.notification h3{font-size:15px;margin:0 0 5px;color:#173552}.notification p{font-size:14px;margin:0 0 7px;color:#4a5c70}.notification small{font-size:12px;color:#617185}.notification .actions{gap:12px;margin-top:8px;flex-wrap:wrap}
+.notification-dot{width:7px;height:7px;background:#ea6818;border-radius:50%;margin-top:6px}.is-read .notification-dot{background:#d8e0e9}.is-read h3{font-weight:500}
+.dashboard-empty{padding:30px 0;color:#586b80;line-height:1.7}
+.dashboard-vehicle,.dashboard-job{padding:20px 0;border-bottom:1px solid #e8edf2;overflow-wrap:anywhere}.dashboard-vehicle:last-child,.dashboard-job:last-child{border-bottom:0;padding-bottom:0}.dashboard-vehicle h3,.dashboard-job h3{font-size:17px;margin:10px 0}.dashboard-job p{white-space:pre-line;color:#586b80;font-size:14px}.dashboard-job .actions{margin-top:12px;flex-wrap:wrap}
+.job-people{border:1px solid #dae2eb;border-radius:10px;padding:14px}.job-people legend{font-weight:600}.job-people .crew-picker{max-height:240px;overflow-y:auto}.job-people .check-label{overflow-wrap:anywhere;min-width:0}
+@media(max-width:1000px){.dashboard-grid{grid-template-columns:1fr}.dashboard-side{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.dashboard-side{grid-template-columns:1fr}.dashboard-panel{padding:18px}.dashboard-section-heading{align-items:flex-start}.dashboard-grid{gap:16px}.dashboard-section-heading h2{font-size:18px}}

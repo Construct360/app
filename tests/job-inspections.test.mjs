@@ -13,7 +13,8 @@ try{
  const job=await makeJob('a','Test scaffold site'),other=await makeJob('b','PRIVATE COMPANY B');
  check((await resources('worker')).jobs.some(j=>j.id===job.id),'All-company shared job directory without assignment');
  check(!(await resources('worker')).jobs.some(j=>j.id===other.id),'No other-company directory');
- check(Object.keys((await resources('worker')).jobs[0]).sort().join(',')==='archived,code,id,site','Safe job projection only');
+ const safeJobKeys=process.env.C360_TEST_V20==='1'?'archived,assigned_to_me,code,end_date,id,is_live,scaffold_type,site,site_address,start_date,status,supervisor_name':'archived,code,id,site';
+ check(Object.keys((await resources('worker')).jobs[0]).sort().join(',')===safeJobKeys,'Safe job projection only');
  await reject(()=>resources('worker',other.id));
  const payload={job_id:job.id,category:'images',name:'Progress.jpg',mime_type:'image/jpeg',byte_size:10};
  const reserve=await change('worker','job_file_save','reserve',payload);
