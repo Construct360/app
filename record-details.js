@@ -12,20 +12,22 @@ function detailChrome(title,subtitle){
 function closeReadPage(){
  if(!readPanel)return;const {dialog,host}=readPanel;while(host.firstChild)dialog.append(host.firstChild);host.remove();readPanel=null;
 }
-function clearRecordViews(){detailGeneration++;closeReadPage();recordView=null;clearStaffDocuments()}
+function clearRecordViews(){clearInlineJobFiles();detailGeneration++;closeReadPage();recordView=null;clearStaffDocuments()}
 function openRecordView(kind,id,historyEntry=true){
+ if(kind==='team'){setPage('dashboard');return}
  if(!RECORD_PAGES[kind]||!isManager()&&!['job','booking'].includes(kind))return;
  closeReadPage();recordView={kind,id};currentPage=RECORD_PAGES[kind];
  if(historyEntry)history.pushState(null,'','#'+kind+'/'+id);render();$('pageTitle').tabIndex=-1;$('pageTitle').focus();window.scrollTo(0,0);
 }
 function restoreRecordRoute(){
  const [kind,id]=location.hash.slice(1).split('/');
+ if(['team','teams','permissions'].includes(kind)){recordView=null;currentPage='dashboard';return}
  if(id&&RECORD_PAGES[kind]){recordView={kind,id};currentPage=RECORD_PAGES[kind]}
  else if(['dashboard','overview','jobs','clients','staff','teams','planner','vehicles','timesheets','inspections','permissions'].includes(kind)){recordView=null;currentPage=kind==='overview'?'dashboard':kind}
 }
 // Existing read-only history/file widgets are mounted in the workspace, not overlays.
 function showReadPage(dialogId,title){
- closeReadPage();recordView=null;detailGeneration++;clearStaffDocuments();
+ clearInlineJobFiles();closeReadPage();recordView=null;detailGeneration++;clearStaffDocuments();
  const dialog=$(dialogId);dialog.close();const host=document.createElement('section');host.className='read-page';
  const back=document.createElement('button');back.type='button';back.className='secondary';back.dataset.detailBack='';back.textContent='← Back to '+currentPage;
  $('records').replaceChildren(back,host);while(dialog.firstChild)host.append(dialog.firstChild);
@@ -33,6 +35,7 @@ function showReadPage(dialogId,title){
 }
 function prepareDetailEditor(dialogId){if(readPanel?.dialog.id===dialogId){closeReadPage();render()}}
 function renderRecordView(){
+ clearInlineJobFiles();
  const {kind,id}=recordView;const generation=++detailGeneration;clearStaffDocuments();
  const rows={staff:workspaceData.staff,team:workspaceData.teams,client:workspaceData.clients,job:workspaceData.jobs,booking:workspaceData.bookings};
  const r=rows[kind]?.find(x=>x.id===id)||(kind==='job'?jobResourceData?.jobs.find(x=>x.id===id):null);
@@ -44,7 +47,7 @@ function renderRecordView(){
  const edit=isManager()?kind==='client'||kind==='job'?`<button type="button" data-action="edit" data-kind="${kind}" data-id="${esc(id)}">Edit ${kind}</button>`:operationButton('edit-'+kind,'Edit '+(kind==='booking'?'task':kind==='staff'?'profile':kind),id,false):'';
  if(kind==='staff'){
   subtitle=r.position||r.employment_role;
-  body=`<section class="profile-hero"><div class="profile-cover"></div><div class="profile-identity"><div class="profile-avatar" id="profileAvatar" aria-label="Staff profile image">${esc(r.full_name.split(/\s+/).map(x=>x[0]).slice(0,2).join(''))}</div><div><p class="eyebrow">STAFF PROFILE</p><h2>${esc(r.full_name)}</h2><p>${esc(subtitle)}</p><span class="badge">${esc(staffStatus(r))}</span></div><div class="actions">${edit}<button type="button" class="secondary" data-staff-pdf="${esc(id)}">Download staff record</button></div></div></section><div class="profile-columns"><div>${detailSection('Contact & personal details',detailFacts([['Email',r.email||'Not added'],['Phone',r.phone||'Not added'],['Address',r.address||'Not added'],['Account',r.user_id?'Linked user account':'Staff profile — no login']]))}${detailSection('Office information',detailFacts([['Hourly rate',r.hourly_rate===null||r.hourly_rate===undefined?'Not set':'£'+Number(r.hourly_rate).toFixed(2)],['Availability',r.availability],['Private notes',r.notes||'No notes added'],['Profile created',r.created_at?vehicleTime(r.created_at):'Not recorded'],['Last updated',r.updated_at?vehicleTime(r.updated_at):'Not recorded']]))}</div><div>${detailSection('Qualifications & credentials',`<div class="profile-qualifications">${r.qualification&&r.qualification!=='None'?`<p>Previous qualification label: ${esc(r.qualification)}</p>`:''}${(r.qualifications||[]).map((q,i)=>`<article><h3>${esc(q.name)}</h3><p>${esc(q.reference||'No reference added')}</p><p class="${q.expires&&q.expires<timesheetToday()?'warning-text':'hint'}">${q.expires?'Expires '+esc(dateLabel(q.expires)):'No expiry recorded'}</p><div class="qualification-image-grid" id="profileQualification${i}"></div></article>`).join('')||'<p>No qualifications added yet.</p>'}</div>`)}${detailSection('Teams',`<div class="actions">${(workspaceData.teams||[]).filter(t=>teamCrew(t.id).includes(id)).map(t=>viewButton('team',t.id,t.name)).join('')||'<p>No team membership.</p>'}</div>`)}${detailSection('Annual leave',`<button type="button" data-leave-add="${esc(id)}">+ Add annual leave</button>${staffLeaveList(id)}`)}</div></div>`;
+  body=`<section class="profile-hero"><div class="profile-cover"></div><div class="profile-identity"><div class="profile-avatar" id="profileAvatar" aria-label="Staff profile image">${esc(r.full_name.split(/\s+/).map(x=>x[0]).slice(0,2).join(''))}</div><div><p class="eyebrow">STAFF PROFILE</p><h2>${esc(r.full_name)}</h2><p>${esc(subtitle)}</p><span class="badge">${esc(staffStatus(r))}</span></div><div class="actions">${edit}<button type="button" class="secondary" data-staff-pdf="${esc(id)}">Download staff record</button></div></div></section><div class="profile-columns"><div>${detailSection('Contact & personal details',detailFacts([['Email',r.email||'Not added'],['Phone',r.phone||'Not added'],['Address',r.address||'Not added'],['Account',r.user_id?'Linked user account':'Staff profile — no login']]))}${detailSection('Office information',detailFacts([['Hourly rate',r.hourly_rate===null||r.hourly_rate===undefined?'Not set':'£'+Number(r.hourly_rate).toFixed(2)],['Availability',r.availability],['Private notes',r.notes||'No notes added'],['Profile created',r.created_at?vehicleTime(r.created_at):'Not recorded'],['Last updated',r.updated_at?vehicleTime(r.updated_at):'Not recorded']]))}</div><div>${detailSection('Qualifications & credentials',`<div class="profile-qualifications">${r.qualification&&r.qualification!=='None'?`<p>Previous qualification label: ${esc(r.qualification)}</p>`:''}${(r.qualifications||[]).map((q,i)=>`<article><h3>${esc(q.name)}</h3><p>${esc(q.reference||'No reference added')}</p><p class="${q.expires&&q.expires<timesheetToday()?'warning-text':'hint'}">${q.expires?'Expires '+esc(dateLabel(q.expires)):'No expiry recorded'}</p><div class="qualification-image-grid" id="profileQualification${i}"></div></article>`).join('')||'<p>No qualifications added yet.</p>'}</div>`)}${detailSection('Annual leave',`<button type="button" data-leave-add="${esc(id)}">+ Add annual leave</button>${staffLeaveList(id)}`)}</div></div>`;
  }else if(kind==='client'){
   subtitle='Client '+r.code;
   body=detailSection('Client details',detailFacts([['Name',r.name],['Address',r.address||'Not added'],['Primary contact',r.contact||'Not added'],['Position / role',r.contact_role||'Not added'],['Email',r.email||'Not added'],['Phone',r.phone||'Not added'],['Notes',r.notes||'No notes'],['Record',r.archived?'Archived':'Current']]))+detailSection('Additional contacts',contactsFor(id).map(c=>`<article class="profile-contact"><h3>${esc(c.name)}</h3>${detailFacts([['Position / role',c.role||'Not added'],['Email',c.email||'Not added'],['Phone',c.phone||'Not added'],['Site',contactJobIds(c.id).map(job=>jobBy(job)?.site).filter(Boolean).join(', ')||'Not attached'],['Notes',c.notes||'No notes']])}</article>`).join('')||'<p>No additional contacts.</p>')+detailSection('Jobs',`<div class="record-list">${workspaceData.jobs.filter(j=>j.client_id===id).map(jobCard).join('')||'<p>No jobs yet.</p>'}</div>`);
@@ -52,6 +55,7 @@ function renderRecordView(){
   subtitle='Company team';body=detailSection('Team details',detailFacts([['Supervisor',staffBy(r.supervisor_id)?.full_name||'Unavailable'],['Record',r.archived?'Archived':'Current'],['Private notes',r.notes||'No notes']]))+detailSection('Team members',`<div class="record-list">${teamCrew(id).map(staffBy).filter(Boolean).map(staffCard).join('')}</div>`)+`<div class="actions">${!r.archived?operationButton('book-team','Schedule task',id):''}</div>`;
  }else if(kind==='job'){
   subtitle='Job '+r.code;body=detailSection('Job details',detailFacts([['Site',r.site],['Site address',r.site_address||'Not added'],['Job supervisor',r.supervisor_name||'Unassigned'],...(r.status?[['Status',r.status],['Scaffold type',r.scaffold_type||'Not set'],['Dates',dateRange(r)]]:[]),...(isManager()?[['Client',clientFor(r.client_id)?.name||'Unavailable'],['Notes',r.notes||'No notes']]:[])]))+`<div class="actions"><button type="button" data-job-files="${esc(id)}">Files &amp; photos</button><button type="button" class="secondary" data-scaffold-job="${esc(id)}">Scaffolds &amp; inspections</button>${isManager()&&!r.archived?operationButton('book-job','New task',id):''}</div>`;
+  body+=detailSection('Job photos & documents','<div id="inlineJobFiles" aria-live="polite">Loading job files…</div>');
   if(isManager())body+=detailSection('Assigned individuals',(r.staff_ids||[]).map(staffBy).filter(Boolean).map(s=>`<p>${esc(s.full_name)}</p>`).join('')||'<p>No individuals assigned.</p>');
   if(isManager())body+=detailSection('Additional contacts',contactsFor(r.client_id).filter(c=>assignmentsFor(id).includes(c.id)).map(c=>`<p><strong>${esc(c.name)}</strong> · ${esc(c.role)}<br>${esc([c.phone,c.email].filter(Boolean).join(' · '))}</p>`).join('')||'<p>No contacts attached.</p>');
   body+=detailSection('Scheduled tasks',`<div class="detail-tasks">${(workspaceData.bookings||[]).filter(b=>b.job_id===id&&b.status==='scheduled').map(bookingCard).join('')||'<p>No tasks visible to you.</p>'}</div>`);
@@ -60,6 +64,7 @@ function renderRecordView(){
  }
  detailChrome(title,subtitle);$('records').innerHTML=`<div class="detail-navigation">${back}${kind==='staff'?operationButton('new-staff','+ Add staff member'):edit}</div>${body}`;
  if(kind==='staff')loadStaffProfileMedia(r,generation);
+ if(kind==='job')loadInlineJobFiles(id);
 }
 async function loadStaffProfileMedia(staff,generation){
  const current=()=>generation===detailGeneration&&recordView?.id===staff.id;

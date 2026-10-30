@@ -59,8 +59,9 @@ function contactsFor(id){return workspaceData.contacts.filter(c=>c.client_id===i
 function assignmentsFor(id){return workspaceData.assignments.filter(a=>a.job_id===id).map(a=>a.contact_id)}
 function dateLabel(value){return value?new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value+'T00:00:00Z')):'Not set'}
 function dateRange(job){return !job.start_date&&!job.end_date?'Dates not set':`${dateLabel(job.start_date)} → ${dateLabel(job.end_date)}`}
-function setPage(page){if(page==='overview')page='dashboard';clearRecordViews();history.pushState(null,'','#'+page);currentPage=page;$('recordSearch').value='';$('archiveFilter').value='active';$('statusFilter').value='all';$('clientFilter').value='all';render()}
+function setPage(page){if(['teams','permissions'].includes(page))page='dashboard';if(page==='overview')page='dashboard';clearRecordViews();history.pushState(null,'','#'+page);currentPage=page;$('recordSearch').value='';$('archiveFilter').value='active';$('statusFilter').value='all';$('clientFilter').value='all';render()}
 function render(){
+  if(['teams','permissions'].includes(currentPage)){clearRecordViews();currentPage='dashboard'}
   if(readPanel)return;
   if(recordView){renderRecordView();return}
   $('overviewSummary').hidden=currentPage!=='dashboard'||!isManager();

@@ -1,7 +1,7 @@
 /* Authenticated downloads only. Shared documents never use public bucket URLs. */
 const JOB_FILE_CATEGORIES={images:'Images',rams:'RAMS',important:'Important documents',private:'Office-only documents'};
 let jobResourceData=null,jobFileData=null,jobFileGeneration=0,jobFileBusy=false,jobUpload=null,jobFileUrls=[];
-function clearJobFiles(){jobFileGeneration++;jobResourceData=null;jobFileData=null;jobUpload=null;for(const url of jobFileUrls)URL.revokeObjectURL(url);jobFileUrls=[];$('jobFilesDialog').close()}
+function clearJobFiles(){clearInlineJobFiles();jobFileGeneration++;jobResourceData=null;jobFileData=null;jobUpload=null;for(const url of jobFileUrls)URL.revokeObjectURL(url);jobFileUrls=[];$('jobFilesDialog').close()}
 async function loadJobResources(){
  const generation=jobFileGeneration,org=c360Access.membership.organisation_id;
  const data=await rpc('job_resources_snapshot',{p_job_id:null});if(generation!==jobFileGeneration)return;
@@ -25,13 +25,13 @@ async function openJobFiles(id){
 }
 function renderJobFiles(){
  const data=jobFileData,j=data.jobs.find(j=>j.id===data.job_id);$('jobFilesTitle').textContent=j.code+' · '+j.site;$('pageTitle').textContent=j.site;
- $('jobFilesBody').innerHTML=`<p class="hint">Images, RAMS and Important documents are shared with everyone in your company. Office-only files are visible to Admin and Operations only.</p>${!j.archived?`<form id="jobUploadForm" class="job-upload"><label>Category<select id="jobFileCategory">${Object.entries(JOB_FILE_CATEGORIES).filter(([key])=>data.can_manage||key==='images').map(([key,label])=>`<option value="${key}">${label}</option>`).join('')}</select></label><label>File<input type="file" id="jobFileInput" required accept="image/jpeg,image/png,image/webp"></label><label>Caption / description (optional)<input id="jobFileCaption" maxlength="1000"></label><p class="hint">Up to 20 MB. Images are optimised for viewing; PDF, DOCX, XLSX and TXT documents are also accepted in document categories.</p><button type="submit" id="jobFileUploadButton">Upload file</button><span id="jobFileUploadStatus" role="status"></span></form>`:'<div class="notice">Archived job: files remain available; new uploads are disabled.</div>'}${Object.entries(JOB_FILE_CATEGORIES).filter(([key])=>data.can_manage||key!=='private').map(([key,label])=>`<section class="job-file-section"><h3>${label}${key==='private'?' · Office only':''}</h3><div class="job-file-grid">${data.files.filter(f=>f.category===key).map(f=>`<article class="job-file-card">${key==='images'?`<button class="job-image-preview secondary" data-file-preview="${f.id}">View photo</button>`:''}<strong>${esc(f.name)}</strong><p>${esc(f.caption)}</p><small>${esc(vehicleTime(f.created_at))}</small><div class="actions"><button class="secondary" data-file-download="${f.id}">Download</button>${data.can_manage?`<button class="text-button" data-file-archive="${f.id}">Remove from view</button>`:''}</div></article>`).join('')||'<p class="hint">No files yet.</p>'}</div></section>`).join('')}`;
+ $('jobFilesBody').innerHTML=`<p class="hint">Images, RAMS and Important documents are shared with everyone in your company. Office-only files are visible to Admin and Operations only.</p>${!j.archived?`<form id="jobUploadForm" class="job-upload"><label>Category<select id="jobFileCategory">${Object.entries(JOB_FILE_CATEGORIES).filter(([key])=>data.can_manage||key==='images').map(([key,label])=>`<option value="${key}">${label}</option>`).join('')}</select></label><label>File<input type="file" id="jobFileInput" required accept="image/jpeg,image/png,image/webp"></label><label>Caption / description (optional)<input id="jobFileCaption" maxlength="1000"></label><p class="hint">Up to 20 MB. Images are optimised for viewing; PDF, DOCX, XLSX and TXT documents are also accepted in document categories.</p><button type="submit" id="jobFileUploadButton">Upload file</button><span id="jobFileUploadStatus" role="status"></span></form>`:'<div class="notice">Archived job: files remain available; new uploads are disabled.</div>'}${Object.entries(JOB_FILE_CATEGORIES).filter(([key])=>data.can_manage||key!=='private').map(([key,label])=>`<section class="job-file-section"><h3>${label}${key==='private'?' · Office only':''}</h3><div class="job-file-grid">${data.files.filter(f=>f.category===key).map(f=>`<article class="job-file-card">${key==='images'&&!f.deletion_pending?`<button class="job-image-preview secondary" data-file-preview="${f.id}">View photo</button>`:''}<strong>${esc(f.name)}</strong><p>${esc(f.caption)}</p><small>${esc(vehicleTime(f.created_at))}</small><div class="actions">${!f.deletion_pending?`<button class="secondary" data-file-download="${f.id}">Download</button>`:'<span class="hint">Deletion pending — retry to finish.</span>'}${data.can_manage?`<button class="text-button" data-file-delete="${f.id}">${f.deletion_pending?'Retry delete':'Delete'}</button>`:''}</div></article>`).join('')||'<p class="hint">No files yet.</p>'}</div></section>`).join('')}`;
  if(!j.archived){$('jobFileCategory').onchange=()=>{$('jobFileInput').accept=$('jobFileCategory').value==='images'?'image/jpeg,image/png,image/webp':'.pdf,.docx,.xlsx,.txt,.jpg,.jpeg,.png,.webp';jobUpload=null};$('jobFileInput').onchange=$('jobFileCaption').oninput=()=>jobUpload=null;$('jobUploadForm').onsubmit=uploadJobFile}
  loadJobFileThumbnails().catch(()=>{});
 }
 async function loadJobFileThumbnails(){
  const generation=jobFileGeneration;
- for(const file of jobFileData.files.filter(f=>f.category==='images').slice(0,40)){
+ for(const file of jobFileData.files.filter(f=>f.category==='images'&&!f.deletion_pending).slice(0,40)){
   const {data,error}=await authClient().storage.from('job-files').download(file.object_path);
   if(generation!==jobFileGeneration)return;if(error)continue;
   const button=$('jobFilesBody').querySelector('[data-file-preview="'+file.id+'"]');if(!button)continue;
@@ -82,12 +82,11 @@ async function useJobFile(id,preview=false){
 }
 function initialiseJobFiles(){
  document.addEventListener('click',async event=>{
-  const button=event.target.closest('[data-job-files],[data-file-download],[data-file-preview],[data-file-archive]');if(!button||jobFileBusy)return;
+  const button=event.target.closest('[data-job-files],[data-file-download],[data-file-preview],[data-file-delete]');if(!button||jobFileBusy)return;
   if(button.dataset.jobFiles){openJobFiles(button.dataset.jobFiles);return}
   if(button.dataset.fileDownload){useJobFile(button.dataset.fileDownload);return}
   if(button.dataset.filePreview){useJobFile(button.dataset.filePreview,true);return}
-  if(!confirm('Remove this file from the job view? It will be retained in storage for recovery.'))return;
-  button.disabled=true;try{await rpc('job_file_save',{p_action:'archive',p_data:{id:button.dataset.fileArchive},p_request_id:crypto.randomUUID()});await openJobFiles(jobFileData.job_id)}catch(e){showError($('jobFilesError'),e)}finally{button.disabled=false}
+  await permanentlyDeleteJobFile(button.dataset.fileDelete,button,jobFileData);
  });
  $('jobFilesClose').onclick=()=>{if(!jobFileBusy&&readPanel?.dialog.id==='jobFilesDialog'){closeReadPage();render();return}if(!jobFileBusy){jobFileGeneration++;$('jobFilesDialog').close();jobUpload=null;for(const url of jobFileUrls)URL.revokeObjectURL(url);jobFileUrls=[]}};
  $('jobFilesDialog').addEventListener('cancel',e=>{e.preventDefault();$('jobFilesClose').click()});
